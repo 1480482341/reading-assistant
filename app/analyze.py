@@ -5,7 +5,7 @@ import shutil
 import sqlite3
 import subprocess
 import tempfile
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Callable
 
 Runner = Callable[[str], str]
@@ -120,9 +120,12 @@ SENTENCE: {sentence}
 
 
 def find_sentence(body: str, needle: str) -> str:
+    needle = needle.strip()
     idx = body.find(needle)
+    if idx < 0 and len(needle) > 40:
+        idx = body.find(needle[:40])
     if idx < 0:
-        return body[:200].strip()
+        return needle[:400]
     start = body.rfind(".", 0, idx) + 1
     end = body.find(".", idx)
     end = len(body) if end < 0 else end + 1
@@ -184,13 +187,25 @@ def analyze_article(conn: sqlite3.Connection, article_id: int,
     status, payload, error = "ready", None, None
     try:
         chunks = chunk_text(row["text"])
+        chunk_items: list[list[dict]] = []
+        failures: list[str] = []
         with ThreadPoolExecutor(max_workers=3) as pool:
-            chunk_items = list(pool.map(lambda c: _analyse_chunk(runner, c), chunks))
+            futures = [pool.submit(_analyse_chunk, runner, chunk) for chunk in chunks]
+            for future in as_completed(futures):
+                try:
+                    chunk_items.append(future.result())
+                except AnalysisError as exc:
+                    failures.append(str(exc))
+        if not chunk_items:
+            raise AnalysisError("; ".join(failures) or "预分析失败")
         merged: dict[tuple[str, str], dict] = {}
         for items in chunk_items:
             for item in items:
                 key = (str(item.get("type", "word")), str(item["term"]).lower())
                 merged[key] = item
+        for item in merged.values():
+            if item.get("type") == "grammar":
+                map_grammar_term(conn, str(item["term"]))
         payload = json.dumps(list(merged.values()), ensure_ascii=False)
     except AnalysisError as exc:
         status, error = "failed", str(exc)

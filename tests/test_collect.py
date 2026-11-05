@@ -54,3 +54,27 @@ def test_ingest_endpoint_accepts_pasted_text(tmp_path):
     assert r.status_code == 200
     assert r.json()["article_id"] > 0
     assert c.post("/api/articles/ingest", json={}).status_code == 400
+
+
+def test_analyze_pending_retries_stuck_running(tmp_path, monkeypatch):
+    from app.analyze import analyze_article
+    from app.collect import analyze_pending
+    db = str(tmp_path / "t.db")
+    conn = init_db(db)
+    conn.execute("INSERT INTO articles(url,title,text,status) VALUES('u','t','short text','pending')")
+    conn.execute("INSERT INTO analysis(article_id,status) VALUES(1,'running')")
+    conn.commit()
+    monkeypatch.setattr("app.collect.analyze_article",
+                        lambda c, i, runner=None: c.execute(
+                            "UPDATE analysis SET status='ready' WHERE article_id=?", (i,)))
+    assert analyze_pending(conn) == 1
+    assert conn.execute("SELECT status FROM analysis WHERE article_id=1").fetchone()["status"] == "ready"
+
+
+def test_ingest_endpoint_accepts_pdf_path(tmp_path, monkeypatch):
+    db = str(tmp_path / "t.db")
+    init_db(db).close()
+    monkeypatch.setattr("app.main.ingest_pdf", lambda conn, path, topic="manual": 7)
+    c = TestClient(create_app(db))
+    r = c.post("/api/articles/ingest", json={"pdf_path": "C:/tmp/x.pdf"})
+    assert r.json() == {"article_id": 7}

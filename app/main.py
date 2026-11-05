@@ -9,10 +9,10 @@ from fastapi.responses import FileResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.analyze import AnalysisError, Runner, analyze_snippet
-from app.collect import ingest_text, ingest_url, start_startup_job
+from app.collect import ingest_pdf, ingest_text, ingest_url, start_startup_job
 from app.db import connect, init_db, insert_occurrence, upsert_entry
-from app.export import export_csv, export_markdown
-from app.review import due_queue, grade
+from app.export import entry_rows, export_csv, export_markdown
+from app.review import due_queue, ensure_review, grade
 from app.sources import pick_today
 
 MAX_SELECTION = 500
@@ -53,8 +53,11 @@ def create_app(db_path: str, runner: Runner | None = None) -> FastAPI:
             elif str(body.get("url") or "").strip():
                 article_id = ingest_url(conn, str(body["url"]).strip(),
                                         str(body.get("topic") or "manual"))
+            elif str(body.get("pdf_path") or "").strip():
+                article_id = ingest_pdf(conn, str(body["pdf_path"]).strip(),
+                                        str(body.get("topic") or "manual"))
             else:
-                raise HTTPException(status_code=400, detail="需要 text 或 url")
+                raise HTTPException(status_code=400, detail="需要 text、url 或 pdf_path")
             if article_id is None:
                 raise HTTPException(status_code=422, detail="正文过短或为空，未入库")
             return {"article_id": article_id}
@@ -111,6 +114,8 @@ def create_app(db_path: str, runner: Runner | None = None) -> FastAPI:
                 str(item.get("grammar_role", "")),
                 str(item.get("why", "")),
             )
+            if recorded:
+                ensure_review(conn, entry_id, date.today().isoformat())
             return {"recorded": recorded, "entry_id": entry_id}
         finally:
             conn.close()
@@ -134,6 +139,14 @@ def create_app(db_path: str, runner: Runner | None = None) -> FastAPI:
             if row is None:
                 raise HTTPException(status_code=404, detail="文章不存在")
             return dict(row)
+        finally:
+            conn.close()
+
+    @app.get("/api/entries")
+    def entries():
+        conn = open_db()
+        try:
+            return [dict(row) for row in entry_rows(conn)]
         finally:
             conn.close()
 

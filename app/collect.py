@@ -78,7 +78,7 @@ def collect_new(conn: sqlite3.Connection) -> int:
 def analyze_pending(conn: sqlite3.Connection, runner: Runner | None = None) -> int:
     rows = conn.execute(
         "SELECT a.id FROM articles a LEFT JOIN analysis an ON an.article_id = a.id "
-        "WHERE an.article_id IS NULL OR an.status = 'failed' ORDER BY a.id"
+        "WHERE an.article_id IS NULL OR an.status IN ('failed', 'running') ORDER BY a.id"
     ).fetchall()
     done = 0
     for row in rows:

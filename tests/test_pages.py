@@ -25,3 +25,14 @@ def test_static_assets_served(tmp_path):
     r = TestClient(create_app(db)).get("/static/style.css")
     assert r.status_code == 200
     assert "--accent" in r.text
+
+
+def test_entries_endpoint_returns_json_list(tmp_path):
+    db = str(tmp_path / "t.db")
+    conn = init_db(db)
+    conn.execute("INSERT INTO entries(kind,lemma) VALUES('word','run')")
+    conn.commit()
+    conn.close()
+    r = TestClient(create_app(db)).get("/api/entries")
+    assert r.status_code == 200
+    assert r.json()[0]["lemma"] == "run"

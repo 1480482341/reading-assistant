@@ -51,7 +51,8 @@
 
 ## 4. 提交与仓库信息
 
-- 远端：origin → https://github.com/1480482341/reading-assistant.git
+- 远端：origin → git@github.com:1480482341/reading-assistant.git（走 SSH）
+- 网络注意：本机 DNS 解析到的 github.com 亚洲节点 443 被封，已把 ~/.ssh/config 里的 github.com 指向 ssh.github.com:443，HTTPS 方式推不动，统一用 SSH
 - 分支：main，跟踪 origin/main，本地与远端一致
 - 最新提交：abbfec3 fix: grading an unknown entry returns 404
 - 提交总数：22，作者全部为 xhs / 128921592+1480482341@users.noreply.github.com（历史已统一改写并强推）

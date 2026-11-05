@@ -101,3 +101,12 @@ def test_run_claude_defaults_to_long_timeout_in_empty_temp_cwd(monkeypatch):
     assert captured["timeout"] == 300
     assert os.path.isdir(captured["cwd"])
     assert os.listdir(captured["cwd"]) == []
+
+
+def test_successful_analysis_marks_article_ready(tmp_path):
+    conn = init_db(str(tmp_path / "t.db"))
+    conn.execute("INSERT INTO articles(url,title,text,status) VALUES('u','t','short text','pending')")
+    conn.commit()
+    aid = conn.execute("SELECT id FROM articles").fetchone()["id"]
+    analyze_article(conn, aid, runner=lambda p: '[{"term":"run","type":"word"}]')
+    assert conn.execute("SELECT status FROM articles WHERE id=?", (aid,)).fetchone()["status"] == "ready"

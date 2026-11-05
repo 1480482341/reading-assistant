@@ -199,4 +199,6 @@ def analyze_article(conn: sqlite3.Connection, article_id: int,
         "UPDATE analysis SET status=?, payload_json=?, error=? WHERE article_id=?",
         (status, payload, error, article_id),
     )
+    if status == "ready":
+        conn.execute("UPDATE articles SET status='ready' WHERE id=?", (article_id,))
     conn.commit()

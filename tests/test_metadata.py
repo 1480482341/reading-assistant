@@ -89,3 +89,18 @@ def test_enrich_leaves_null_on_model_error(tmp_path):
     assert enrich_metadata(conn, runner=runner) == 0
     assert conn.execute(
         "SELECT title_zh FROM articles WHERE id=?", (aid,)).fetchone()["title_zh"] is None
+
+
+def test_enrich_skips_batch_when_model_returns_fewer_items(tmp_path):
+    conn = init_db(str(tmp_path / "t.db"))
+    _add_article(conn, "First")
+    _add_article(conn, "Second")
+    conn.commit()
+
+    def runner(prompt):
+        return '[{"title_zh":"只有一个","tags":["AI"]}]'
+
+    assert enrich_metadata(conn, runner=runner) == 0
+    rows = conn.execute("SELECT title_zh FROM articles ORDER BY id").fetchall()
+    assert [r["title_zh"] for r in rows] == [None, None]
+    assert conn.execute("SELECT COUNT(*) FROM article_tags").fetchone()[0] == 0

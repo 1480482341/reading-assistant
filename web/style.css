@@ -112,3 +112,11 @@ body {
   font-size: 13px;
 }
 .popup button.ghost { background: transparent; color: var(--muted); border-color: var(--line); }
+
+.banner {
+  padding: 10px 32px;
+  background: #fdf3d8;
+  border-bottom: 1px solid #e8d8a8;
+  color: #6b4e00;
+  font-size: 13px;
+}

@@ -13,7 +13,14 @@ CREATE TABLE IF NOT EXISTS articles (
     raw_html     TEXT,
     text         TEXT NOT NULL,
     word_count   INTEGER,
-    status       TEXT DEFAULT 'pending'
+    status       TEXT DEFAULT 'pending',
+    title_zh     TEXT
+);
+
+CREATE TABLE IF NOT EXISTS article_tags (
+    article_id INTEGER NOT NULL REFERENCES articles(id) ON DELETE CASCADE,
+    tag        TEXT NOT NULL,
+    PRIMARY KEY (article_id, tag)
 );
 
 CREATE TABLE IF NOT EXISTS analysis (
@@ -92,6 +99,9 @@ def init_db(path: str) -> sqlite3.Connection:
     conn = connect(path)
     try:
         conn.executescript(SCHEMA)
+        cols = {row["name"] for row in conn.execute("PRAGMA table_info(articles)")}
+        if "title_zh" not in cols:
+            conn.execute("ALTER TABLE articles ADD COLUMN title_zh TEXT")
         conn.commit()
     except sqlite3.DatabaseError as exc:
         conn.close()

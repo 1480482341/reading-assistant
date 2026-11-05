@@ -96,3 +96,39 @@ def init_db(path: str) -> sqlite3.Connection:
         conn.close()
         raise sqlite3.DatabaseError(f"数据库无法打开: {path}") from exc
     return conn
+
+
+def upsert_entry(conn: sqlite3.Connection, kind: str, lemma: str) -> int:
+    row = conn.execute(
+        "INSERT INTO entries(kind, lemma) VALUES(?, ?) "
+        "ON CONFLICT(kind, lemma) DO UPDATE SET lemma=excluded.lemma RETURNING id",
+        (kind, lemma),
+    ).fetchone()
+    conn.commit()
+    return row["id"]
+
+
+def insert_occurrence(conn: sqlite3.Connection, entry_id: int, article_id: int,
+                      sentence: str, surface: str, gloss: str,
+                      grammar_role: str, why: str) -> bool:
+    seen = conn.execute(
+        "SELECT 1 FROM occurrences WHERE entry_id = ? AND article_id = ?",
+        (entry_id, article_id),
+    ).fetchone()
+    if seen:
+        return False
+    conn.execute(
+        "INSERT INTO occurrences(entry_id, article_id, sentence, surface, gloss, "
+        "grammar_role, why) VALUES(?, ?, ?, ?, ?, ?, ?)",
+        (entry_id, article_id, sentence, surface, gloss, grammar_role, why),
+    )
+    conn.commit()
+    return True
+
+
+def entry_frequency(conn: sqlite3.Connection) -> list[sqlite3.Row]:
+    return conn.execute(
+        "SELECT e.id AS entry_id, e.kind, e.lemma, COUNT(o.id) AS count "
+        "FROM entries e LEFT JOIN occurrences o ON o.entry_id = e.id "
+        "GROUP BY e.id ORDER BY count DESC, e.lemma ASC"
+    ).fetchall()

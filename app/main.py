@@ -12,6 +12,7 @@ from app.analyze import AnalysisError, Runner, analyze_snippet
 from app.collect import ingest_pdf, ingest_text, ingest_url, start_startup_job
 from app.db import connect, init_db, insert_occurrence, upsert_entry
 from app.export import entry_rows, export_csv, export_markdown
+from app.library import library_rows
 from app.review import due_queue, ensure_review, grade
 from app.sources import pick_today
 
@@ -128,12 +129,20 @@ def create_app(db_path: str, runner: Runner | None = None) -> FastAPI:
         finally:
             conn.close()
 
+    @app.get("/api/articles/library")
+    def article_library():
+        conn = open_db()
+        try:
+            return library_rows(conn)
+        finally:
+            conn.close()
+
     @app.get("/api/articles/{article_id}")
     def article_detail(article_id: int):
         conn = open_db()
         try:
             row = conn.execute(
-                "SELECT id, title, source, topic, word_count, status, text "
+                "SELECT id, title, title_zh, source, topic, word_count, status, text "
                 "FROM articles WHERE id = ?", (article_id,),
             ).fetchone()
             if row is None:

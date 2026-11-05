@@ -1,11 +1,22 @@
 import sqlite3
 import urllib.request
+from email.utils import parsedate_to_datetime
 
 import feedparser
 import trafilatura
 
 MIN_WORDS = 400
 USER_AGENT = "reading-assistant/1.0"
+
+
+def normalize_published_at(raw: str) -> str:
+    raw = (raw or "").strip()
+    if not raw:
+        return ""
+    try:
+        return parsedate_to_datetime(raw).date().isoformat()
+    except (TypeError, ValueError):
+        return raw
 
 
 def fetch_bytes(url: str, timeout: int = 30) -> bytes:
@@ -52,7 +63,8 @@ def ingest_article(conn: sqlite3.Connection, url: str, title: str, source: str,
     row = conn.execute(
         "INSERT INTO articles(url, title, source, topic, published_at, raw_html, text, "
         "word_count, status) VALUES(?, ?, ?, ?, ?, ?, ?, ?, 'pending') RETURNING id",
-        (url, title, source, topic, published_at, html, text, words),
+        (url, title, source, topic, normalize_published_at(published_at),
+         html, text, words),
     ).fetchone()
     conn.commit()
     return row["id"]

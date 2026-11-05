@@ -36,6 +36,30 @@ def test_old_db_gets_title_zh_column_migrated(tmp_path):
     assert migrated.execute("SELECT title FROM articles").fetchone()["title"] == "Old"
 
 
+def test_init_db_stamps_schema_version(tmp_path):
+    conn = init_db(str(tmp_path / "t.db"))
+    assert conn.execute("PRAGMA user_version").fetchone()[0] == 1
+
+
+def test_date_migration_only_runs_for_old_databases(tmp_path):
+    db = str(tmp_path / "t.db")
+    conn = init_db(db)
+    conn.execute("INSERT INTO articles(url,title,text,status) VALUES('u','t','body','ready')")
+    conn.execute("UPDATE articles SET published_at='Wed, 04 Nov 2026 15:32:52 +0000'")
+    conn.execute("PRAGMA user_version = 1")
+    conn.commit()
+    conn.close()
+
+    migrated = init_db(db)
+    assert migrated.execute("SELECT published_at FROM articles").fetchone()[0].startswith("Wed,")
+
+    migrated.execute("PRAGMA user_version = 0")
+    migrated.commit()
+    migrated.close()
+    migrated = init_db(db)
+    assert migrated.execute("SELECT published_at FROM articles").fetchone()[0] == "2026-11-04"
+
+
 def test_corrupt_db_raises_clear_error(tmp_path):
     p = tmp_path / "bad.db"
     p.write_bytes(b"not a database")

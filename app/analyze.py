@@ -4,10 +4,15 @@ import re
 import shutil
 import sqlite3
 import subprocess
+import tempfile
 from concurrent.futures import ThreadPoolExecutor
 from typing import Callable
 
 Runner = Callable[[str], str]
+
+DEFAULT_CHUNK_WORDS = 800
+DEFAULT_TIMEOUT = 300
+WORDS_PER_ITEM = 15
 
 PROMPT_TEMPLATE = """You are a vocabulary and grammar analyst for a Chinese reader of English.
 
@@ -22,7 +27,8 @@ Each element must have these keys:
   why           one or two sentences in Chinese explaining why this construction is used
 
 Cover difficult vocabulary, collocations, and grammar points a CET-4 level reader would stumble on.
-Aim for 150-200 items when the passage is long enough; fewer is fine for short passages.
+Aim for about {target} items for this passage (roughly one per 15 words);
+fewer is fine when the passage has few difficult constructions.
 
 PASSAGE:
 """
@@ -32,7 +38,7 @@ class AnalysisError(Exception):
     pass
 
 
-def chunk_text(text: str, words_per_chunk: int = 2000) -> list[str]:
+def chunk_text(text: str, words_per_chunk: int = DEFAULT_CHUNK_WORDS) -> list[str]:
     words = text.split()
     if not words:
         return [""]
@@ -69,10 +75,22 @@ def parse_items(raw: str) -> list[dict]:
 
 
 def build_preanalysis_prompt(chunk: str) -> str:
-    return PROMPT_TEMPLATE + chunk
+    target = max(1, round(len(chunk.split()) / WORDS_PER_ITEM))
+    return PROMPT_TEMPLATE.format(target=target) + chunk
 
 
-def run_claude(prompt: str, timeout: int = 120) -> str:
+_MODEL_CWD: str | None = None
+
+
+def model_cwd() -> str:
+    """Empty working directory so the model never picks up this project's context."""
+    global _MODEL_CWD
+    if _MODEL_CWD is None:
+        _MODEL_CWD = tempfile.mkdtemp(prefix="reading-assistant-model-")
+    return _MODEL_CWD
+
+
+def run_claude(prompt: str, timeout: int = DEFAULT_TIMEOUT) -> str:
     binary = shutil.which("claude")
     if not binary:
         raise AnalysisError("找不到 claude 可执行文件")
@@ -80,7 +98,8 @@ def run_claude(prompt: str, timeout: int = 120) -> str:
     cmd += ["-p", "--output-format", "json"]
     try:
         proc = subprocess.run(cmd, input=prompt, capture_output=True, text=True,
-                              encoding="utf-8", errors="replace", timeout=timeout)
+                              encoding="utf-8", errors="replace", timeout=timeout,
+                              cwd=model_cwd())
     except subprocess.TimeoutExpired as exc:
         raise AnalysisError(f"模型调用超时（{timeout}s）") from exc
     if proc.returncode != 0:

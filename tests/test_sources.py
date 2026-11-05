@@ -28,4 +28,5 @@ def test_same_url_is_not_duplicated(tmp_path):
     html = (FIX / "sample_article.html").read_text(encoding="utf-8")
     a = ingest_article(conn, "u2", "t", "s", "tech", html, "")
     b = ingest_article(conn, "u2", "t", "s", "tech", html, "")
+    assert a is not None
     assert a == b

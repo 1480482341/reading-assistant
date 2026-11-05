@@ -50,6 +50,7 @@ def ingest_pdf(conn: sqlite3.Connection, path: str, topic: str = "manual") -> in
 def collect_new(conn: sqlite3.Connection) -> int:
     seed_sources(conn)
     added = 0
+    known = {row["url"] for row in conn.execute("SELECT url FROM articles WHERE url IS NOT NULL")}
     sources = conn.execute(
         "SELECT name, feed_url, topic, link_pattern FROM sources WHERE enabled = 1"
     ).fetchall()
@@ -62,6 +63,8 @@ def collect_new(conn: sqlite3.Connection) -> int:
         for item in fetch_items(feed):
             if src["link_pattern"] and src["link_pattern"] not in item["link"]:
                 continue
+            if item["link"] in known:
+                continue
             try:
                 html = fetch_bytes(item["link"]).decode("utf-8", errors="replace")
                 article_id = ingest_article(conn, item["link"], item["title"],
@@ -70,6 +73,7 @@ def collect_new(conn: sqlite3.Connection) -> int:
             except Exception:
                 logger.warning("抓取文章失败: %s", item["link"], exc_info=True)
                 continue
+            known.add(item["link"])
             if article_id:
                 added += 1
     return added

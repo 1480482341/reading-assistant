@@ -8,7 +8,7 @@
 uv run uvicorn app.main:app --port 8000
 ```
 
-打开 <http://127.0.0.1:8000> 阅读，<http://127.0.0.1:8000/review> 复习。
+打开 <http://127.0.0.1:8000> 阅读，<http://127.0.0.1:8000/review> 复习。读完一篇点顶栏「读完了」，当天队列就不会再推它。
 
 启动时后台线程会抓取订阅源、入库新文章并预分析（正文立即可读，词条随后出现）。没有常驻守护进程，关掉应用即停止。
 
@@ -28,12 +28,10 @@ curl -X POST http://127.0.0.1:8000/api/articles/ingest \
   -H 'Content-Type: application/json' \
   -d '{"title":"我的文章","text":"正文……"}'
 
-# 给一个链接（自动提取正文）
+# 给一个本地 PDF
 curl -X POST http://127.0.0.1:8000/api/articles/ingest \
-  -H 'Content-Type: application/json' -d '{"url":"https://example.com/post"}'
+  -H 'Content-Type: application/json' -d '{"pdf_path":"C:/papers/attention.pdf"}'
 ```
-
-PDF 走 `app.collect.ingest_pdf(conn, path)`。
 
 ## 换订阅源
 

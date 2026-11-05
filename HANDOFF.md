@@ -25,12 +25,8 @@
 
 ## 3. 已知遗留（非阻塞）
 
-- 解析模型输出用的正则 `\[.*\]` 在数组后还有方括号的散文里会越界
-- 没有写入 `status='read'` 的地方，`pick_today` 的「跳过已读」是死逻辑
-- 启动时先把订阅源所有条目正文都下载一遍才按 URL 去重（约 60 次 HTTP）
-- 超时/非零退出也会重试一次（最坏 600s）；模块导入即建 `data/library.db`（依赖 cwd）
-- `POST /api/review/{id}` 对不存在词条返回 500 而非 4xx
 - git 提交身份是临时环境变量指定的，仓库仍未配置 user.name/email
+- 最终审查的 5 个次要项已全部修掉：JSON 解析改用 `raw_decode` 扫描；新增「读完了」按钮与 `POST /api/articles/{id}/read`，`pick_today` 的已读过滤不再是死逻辑；启动抓取先查 URL 再下载正文；超时/非零退出不再触发重试（新增 `ModelCallError`），`data/library.db` 改为绝对路径；`POST /api/review/{id}` 对不存在的词条返回 404
 
 ## 4. 仍需用户拍板
 

@@ -1,6 +1,10 @@
 import sqlite3
 from pathlib import Path
 
+from app.sources import normalize_published_at
+
+SCHEMA_VERSION = 1
+
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS articles (
     id           INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -21,6 +25,14 @@ CREATE TABLE IF NOT EXISTS article_tags (
     article_id INTEGER NOT NULL REFERENCES articles(id) ON DELETE CASCADE,
     tag        TEXT NOT NULL,
     PRIMARY KEY (article_id, tag)
+);
+
+CREATE TABLE IF NOT EXISTS lookups (
+    article_id   INTEGER NOT NULL REFERENCES articles(id) ON DELETE CASCADE,
+    text         TEXT NOT NULL,
+    payload_json TEXT NOT NULL,
+    created_at   TEXT DEFAULT (datetime('now')),
+    PRIMARY KEY (article_id, text)
 );
 
 CREATE TABLE IF NOT EXISTS analysis (
@@ -95,6 +107,19 @@ def connect(path: str) -> sqlite3.Connection:
     return conn
 
 
+def _normalize_stored_dates(conn: sqlite3.Connection) -> None:
+    rows = conn.execute(
+        "SELECT id, published_at FROM articles "
+        "WHERE published_at IS NOT NULL AND published_at <> ''"
+    ).fetchall()
+    for row in rows:
+        iso = normalize_published_at(row["published_at"])
+        if iso != row["published_at"]:
+            conn.execute("UPDATE articles SET published_at = ? WHERE id = ?",
+                         (iso, row["id"]))
+    conn.commit()
+
+
 def init_db(path: str) -> sqlite3.Connection:
     conn = connect(path)
     try:
@@ -103,6 +128,11 @@ def init_db(path: str) -> sqlite3.Connection:
         if "title_zh" not in cols:
             conn.execute("ALTER TABLE articles ADD COLUMN title_zh TEXT")
         conn.commit()
+        if conn.execute("PRAGMA user_version").fetchone()[0] < SCHEMA_VERSION:
+            if "published_at" in cols:
+                _normalize_stored_dates(conn)
+            conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
+            conn.commit()
     except sqlite3.DatabaseError as exc:
         conn.close()
         raise sqlite3.DatabaseError(f"数据库无法打开: {path}") from exc

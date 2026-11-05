@@ -36,3 +36,11 @@ def test_entries_endpoint_returns_json_list(tmp_path):
     r = TestClient(create_app(db)).get("/api/entries")
     assert r.status_code == 200
     assert r.json()[0]["lemma"] == "run"
+
+
+def test_library_page_serves(tmp_path):
+    db = str(tmp_path / "t.db")
+    init_db(db).close()
+    r = TestClient(create_app(db)).get("/library")
+    assert r.status_code == 200
+    assert "article-list" in r.text

@@ -186,6 +186,8 @@ def create_app(db_path: str, runner: Runner | None = None) -> FastAPI:
     def review_grade(entry_id: int, body: dict):
         conn = open_db()
         try:
+            if conn.execute("SELECT 1 FROM entries WHERE id = ?", (entry_id,)).fetchone() is None:
+                raise HTTPException(status_code=404, detail="词条不存在")
             grade(conn, entry_id, bool(body.get("known")), date.today().isoformat())
             return {"ok": True}
         finally:

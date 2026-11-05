@@ -46,3 +46,10 @@ def test_confirmed_occurrence_enters_review_queue(tmp_path):
     assert c.post("/api/occurrences", json=body).json()["recorded"] is True
     queue = c.get("/api/review/queue").json()
     assert [item["lemma"] for item in queue] == ["albeit"]
+
+
+def test_grading_unknown_entry_returns_404(tmp_path):
+    db = str(tmp_path / "t.db")
+    init_db(db).close()
+    r = TestClient(create_app(db)).post("/api/review/999", json={"known": True})
+    assert r.status_code == 404

@@ -50,6 +50,34 @@ def ingest_article(conn: sqlite3.Connection, url: str, title: str, source: str,
     return row["id"]
 
 
+TOPIC_ORDER = ["tech", "history", "humanities"]
+
+
+def pick_today(conn: sqlite3.Connection, limit: int = 5) -> list[dict]:
+    picks: list[dict] = []
+    seen: set[int] = set()
+    while len(picks) < limit:
+        progressed = False
+        for topic in TOPIC_ORDER:
+            if len(picks) >= limit:
+                break
+            rows = conn.execute(
+                "SELECT id, title, topic, status FROM articles "
+                "WHERE topic = ? AND status IN ('ready', 'pending') "
+                "ORDER BY published_at DESC, id DESC",
+                (topic,),
+            ).fetchall()
+            for row in rows:
+                if row["id"] not in seen:
+                    seen.add(row["id"])
+                    picks.append(dict(row))
+                    progressed = True
+                    break
+        if not progressed:
+            break
+    return picks
+
+
 def seed_sources(conn: sqlite3.Connection) -> None:
     for name, feed_url, topic, link_pattern in DEFAULT_SOURCES:
         conn.execute(

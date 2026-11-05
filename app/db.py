@@ -63,11 +63,12 @@ CREATE TABLE IF NOT EXISTS review (
 );
 
 CREATE TABLE IF NOT EXISTS sources (
-    id       INTEGER PRIMARY KEY AUTOINCREMENT,
-    name     TEXT NOT NULL,
-    feed_url TEXT NOT NULL UNIQUE,
-    topic    TEXT NOT NULL,
-    enabled  INTEGER DEFAULT 1
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    name         TEXT NOT NULL,
+    feed_url     TEXT NOT NULL UNIQUE,
+    topic        TEXT NOT NULL,
+    link_pattern TEXT DEFAULT '',
+    enabled      INTEGER DEFAULT 1
 );
 
 CREATE TABLE IF NOT EXISTS settings (

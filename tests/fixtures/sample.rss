@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Quanta Magazine</title>
+    <link>https://www.quantamagazine.org/</link>
+    <item>
+      <title>The Hidden Structure of Market Noise</title>
+      <link>https://example.org/a1</link>
+      <pubDate>Tue, 04 Nov 2026 10:00:00 +0000</pubDate>
+      <description>Why algorithmic trading behaves like weather.</description>
+    </item>
+    <item>
+      <title>How Cells Keep Time</title>
+      <link>https://example.org/a2</link>
+      <pubDate>Mon, 03 Nov 2026 09:00:00 +0000</pubDate>
+      <description>Circadian clocks, examined.</description>
+    </item>
+  </channel>
+</rss>

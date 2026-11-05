@@ -92,6 +92,42 @@ def run_claude(prompt: str, timeout: int = 120) -> str:
     return outer.get("result", proc.stdout)
 
 
+SNIPPET_TEMPLATE = """A reader selected "{term}" in the sentence below.
+Return ONLY a JSON array with one object with keys: term, type, gloss_zh, grammar_role, sentence, why.
+Write gloss_zh, grammar_role and why in Chinese.
+
+SENTENCE: {sentence}
+"""
+
+
+def find_sentence(body: str, needle: str) -> str:
+    idx = body.find(needle)
+    if idx < 0:
+        return body[:200].strip()
+    start = body.rfind(".", 0, idx) + 1
+    end = body.find(".", idx)
+    end = len(body) if end < 0 else end + 1
+    return body[start:end].strip()[:400]
+
+
+def analyze_snippet(conn: sqlite3.Connection, article_id: int, needle: str,
+                    runner: Runner | None = None) -> dict:
+    runner = runner or run_claude
+    row = conn.execute("SELECT text FROM articles WHERE id = ?", (article_id,)).fetchone()
+    body = row["text"] if row else ""
+    sentence = find_sentence(body, needle)
+    prompt = SNIPPET_TEMPLATE.format(term=needle, sentence=sentence)
+    try:
+        items = parse_items(runner(prompt))
+    except AnalysisError:
+        items = parse_items(runner(prompt + "\n\nReturn ONLY the JSON array."))
+    if not items:
+        raise AnalysisError("模型未返回条目")
+    item = items[0]
+    item.setdefault("sentence", sentence)
+    return item
+
+
 def map_grammar_term(conn: sqlite3.Connection, label: str) -> int:
     row = conn.execute("SELECT id FROM grammar_terms WHERE label = ?", (label,)).fetchone()
     if row:

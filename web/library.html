@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <title>文章库 · Reading Assistant</title>
   <link rel="stylesheet" href="/static/style.css">
+  <link rel="stylesheet" href="/static/library.css">
 </head>
 <body>
   <header class="topbar">
@@ -16,8 +17,21 @@
     </nav>
   </header>
 
-  <main>
+  <main class="library-wrap">
+    <h1>文章库</h1>
+    <div class="filters">
+      <div class="status-filter" id="status-filter">
+        <button data-status="all">全部</button>
+        <button data-status="pending">待分析</button>
+        <button data-status="ready">可读</button>
+        <button data-status="read">已读</button>
+      </div>
+      <div class="tag-filter" id="tag-filter"></div>
+    </div>
     <ul class="article-list" id="article-list"></ul>
+    <p class="empty" id="empty-state" hidden>没有匹配的文章。</p>
   </main>
+
+  <script src="/static/library.js"></script>
 </body>
 </html>

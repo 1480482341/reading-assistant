@@ -44,3 +44,18 @@ def test_library_page_serves(tmp_path):
     r = TestClient(create_app(db)).get("/library")
     assert r.status_code == 200
     assert "article-list" in r.text
+
+
+def test_reading_page_links_library_and_shows_title_zh_slot(tmp_path):
+    db = str(tmp_path / "t.db")
+    init_db(db).close()
+    html = TestClient(create_app(db)).get("/").text
+    assert 'href="/library"' in html
+    assert 'id="article-title-zh"' in html
+
+
+def test_review_page_links_library(tmp_path):
+    db = str(tmp_path / "t.db")
+    init_db(db).close()
+    html = TestClient(create_app(db)).get("/review").text
+    assert 'href="/library"' in html

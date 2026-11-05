@@ -19,22 +19,46 @@ async function checkHealth() {
   }
 }
 
-async function loadArticle() {
-  const today = await fetch("/api/articles/today").then(r => r.json());
-  if (!today.length) {
-    document.getElementById("article-title").textContent = "今天还没有文章";
-    bodyEl.textContent =
-      "还没有可读文章：等后台抓取完成，或用 POST /api/articles/ingest 粘贴链接或正文。";
-    return;
-  }
-  articleId = today[0].id;
-  const full = await fetch(`/api/articles/${articleId}`).then(r => r.json());
+function showMessage(title, body) {
+  articleId = null;
+  document.getElementById("article-title").textContent = title;
+  document.getElementById("article-title-zh").hidden = true;
+  document.getElementById("article-meta").textContent = "";
+  bodyEl.textContent = body;
+}
+
+function showArticle(full) {
+  articleId = full.id;
   document.getElementById("article-title").textContent = full.title;
+  const titleZh = document.getElementById("article-title-zh");
+  titleZh.textContent = full.title_zh || "";
+  titleZh.hidden = !full.title_zh;
   document.getElementById("article-meta").textContent =
     `${full.topic || ""} · ${full.word_count || ""} words · ${full.status}`;
   bodyEl.innerHTML = full.text
     .split(/\n+/).filter(Boolean)
     .map(p => `<p>${escapeHtml(p)}</p>`).join("");
+}
+
+async function loadArticle() {
+  const requested = new URLSearchParams(location.search).get("id");
+  if (requested) {
+    const resp = await fetch(`/api/articles/${encodeURIComponent(requested)}`);
+    if (!resp.ok) {
+      showMessage("文章不存在", "这篇文章可能已被删除，回到文章库重新选择。");
+      return;
+    }
+    showArticle(await resp.json());
+    return;
+  }
+  const today = await fetch("/api/articles/today").then(r => r.json());
+  if (!today.length) {
+    showMessage("今天还没有文章",
+      "还没有可读文章：等后台抓取完成，或用 POST /api/articles/ingest 粘贴链接或正文。");
+    return;
+  }
+  const full = await fetch(`/api/articles/${today[0].id}`).then(r => r.json());
+  showArticle(full);
 }
 
 function sentenceAround(text, needle) {

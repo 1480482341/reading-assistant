@@ -10,11 +10,21 @@ function escapeHtml(s) {
   })[c]);
 }
 
+async function checkHealth() {
+  try {
+    const health = await fetch("/api/health").then(r => r.json());
+    document.getElementById("banner").hidden = health.claude_available === true;
+  } catch (err) {
+    document.getElementById("banner").hidden = false;
+  }
+}
+
 async function loadArticle() {
   const today = await fetch("/api/articles/today").then(r => r.json());
   if (!today.length) {
     document.getElementById("article-title").textContent = "今天还没有文章";
-    bodyEl.textContent = "点右上角可以粘贴链接或文本，或等后台抓取完成。";
+    bodyEl.textContent =
+      "还没有可读文章：等后台抓取完成，或用 POST /api/articles/ingest 粘贴链接或正文。";
     return;
   }
   articleId = today[0].id;
@@ -65,14 +75,16 @@ async function onSelect() {
 
   showPopup(rect, { term: text, gloss_zh: "分析中…" }, text);
   try {
-    const miss = await fetch("/api/lookup/miss", {
+    const resp = await fetch("/api/lookup/miss", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ article_id: articleId, text }),
-    }).then(r => r.json());
+    });
+    if (!resp.ok) throw new Error("model unavailable");
+    const miss = await resp.json();
     showPopup(rect, miss.item, text);
   } catch (err) {
-    showPopup(rect, { term: text, gloss_zh: "分析失败，已记录选区" }, text);
+    showPopup(rect, { term: text, gloss_zh: "模型不可用，可先记下来" }, text);
   }
 }
 
@@ -111,3 +123,4 @@ document.getElementById("popup-save").addEventListener("click", save);
 document.getElementById("popup-close").addEventListener("click", () => { popup.hidden = true; });
 
 loadArticle();
+checkHealth();

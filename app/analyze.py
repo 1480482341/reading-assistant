@@ -232,4 +232,5 @@ def analyze_article(conn: sqlite3.Connection, article_id: int,
     )
     if status == "ready":
         conn.execute("UPDATE articles SET status='ready' WHERE id=?", (article_id,))
+        conn.execute("DELETE FROM lookups WHERE article_id=?", (article_id,))
     conn.commit()

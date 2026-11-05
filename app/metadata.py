@@ -1,7 +1,8 @@
 import logging
 import sqlite3
 
-from app.analyze import ModelCallError, Runner, _loads_array, run_claude
+from app.analyze import (AnalysisError, ModelCallError, Runner, _loads_array,
+                         run_claude)
 
 logger = logging.getLogger(__name__)
 
@@ -65,12 +66,18 @@ def parse_metadata(raw: str, expected: int) -> list[dict]:
 
 
 def _parse_with_retry(runner: Runner, prompt: str, expected: int) -> list[dict]:
+    def attempt(text: str) -> list[dict]:
+        items = parse_metadata(runner(text), expected)
+        if len(items) != expected:
+            raise AnalysisError(f"模型返回 {len(items)} 项，期望 {expected} 项")
+        return items
+
     try:
-        return parse_metadata(runner(prompt), expected)
+        return attempt(prompt)
     except ModelCallError:
         raise
     except Exception:
-        return parse_metadata(runner(prompt + "\n\nReturn ONLY the JSON array."), expected)
+        return attempt(prompt + "\n\nReturn ONLY the JSON array.")
 
 
 def _excerpt(text: str) -> str:

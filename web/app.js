@@ -42,6 +42,10 @@ function showArticle(full) {
 
 async function loadArticle() {
   const requested = new URLSearchParams(location.search).get("id");
+  if (requested && !/^\d+$/.test(requested)) {
+    showMessage("文章不存在", "链接里的文章编号无效，回到文章库重新选择。");
+    return;
+  }
   if (requested) {
     const resp = await fetch(`/api/articles/${encodeURIComponent(requested)}`);
     if (!resp.ok) {

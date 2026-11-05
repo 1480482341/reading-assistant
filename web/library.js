@@ -1,13 +1,9 @@
-const TAGS = [
-  "AI", "Computing", "Physics", "Math", "Biology", "Medicine", "Psychology",
-  "Philosophy", "History", "Politics", "Economics", "Environment", "Art",
-  "Literature", "Culture", "Society",
-];
-
 const STATUS_LABELS = { pending: "待分析", ready: "可读", read: "已读" };
 
 const state = { tags: new Set(), status: "all" };
 let articles = [];
+let allTags = [];
+let loadError = false;
 
 const listEl = document.getElementById("article-list");
 const tagFilterEl = document.getElementById("tag-filter");
@@ -22,7 +18,7 @@ function escapeHtml(s) {
 
 function renderTagButtons() {
   tagFilterEl.innerHTML = "";
-  for (const tag of TAGS) {
+  for (const tag of allTags) {
     const btn = document.createElement("button");
     btn.textContent = tag;
     btn.dataset.tag = tag;
@@ -62,11 +58,18 @@ function metaLine(article) {
   return parts.map(escapeHtml).join(" · ");
 }
 
+function emptyText() {
+  if (loadError) return "文章库加载失败，请刷新重试。";
+  if (articles.length === 0) return "文章库为空，等待后台抓取完成。";
+  return "没有匹配的文章。";
+}
+
 function render() {
   syncFilters();
   const visible = articles.filter(matches);
   listEl.innerHTML = "";
-  emptyEl.hidden = articles.length === 0 || visible.length > 0;
+  emptyEl.hidden = visible.length > 0;
+  emptyEl.textContent = emptyText();
 
   for (const article of visible) {
     const li = document.createElement("li");
@@ -96,14 +99,29 @@ statusFilterEl.addEventListener("click", e => {
   render();
 });
 
+function getJson(url) {
+  return fetch(url).then(resp => {
+    if (!resp.ok) throw new Error(`${url} ${resp.status}`);
+    return resp.json();
+  });
+}
+
 async function load() {
-  try {
-    articles = await fetch("/api/articles/library").then(r => r.json());
-  } catch (err) {
-    articles = [];
+  const [tagsResult, articlesResult] = await Promise.allSettled([
+    getJson("/api/tags"),
+    getJson("/api/articles/library"),
+  ]);
+  if (tagsResult.status === "fulfilled") {
+    allTags = tagsResult.value.tags || [];
   }
+  if (articlesResult.status === "fulfilled") {
+    articles = articlesResult.value;
+  } else {
+    articles = [];
+    loadError = true;
+  }
+  renderTagButtons();
   render();
 }
 
-renderTagButtons();
 load();

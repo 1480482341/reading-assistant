@@ -135,6 +135,21 @@ def test_partial_chunk_failure_keeps_successful_items(tmp_path):
     assert "good" in row["payload_json"]
 
 
+def test_reanalysis_clears_lookup_cache(tmp_path):
+    conn = init_db(str(tmp_path / "t.db"))
+    conn.execute("INSERT INTO articles(url,title,text,status) VALUES('u','t','short text','pending')")
+    conn.commit()
+    aid = conn.execute("SELECT id FROM articles").fetchone()["id"]
+    conn.execute("INSERT INTO lookups(article_id,text,payload_json) VALUES(?,?,?)",
+                 (aid, "run", '{"term":"run","gloss_zh":"旧"}'))
+    conn.commit()
+
+    analyze_article(conn, aid, runner=lambda p: '[{"term":"run","type":"word","gloss_zh":"跑"}]')
+    left = conn.execute("SELECT COUNT(*) AS n FROM lookups WHERE article_id=?",
+                        (aid,)).fetchone()["n"]
+    assert left == 0
+
+
 def test_grammar_items_register_in_grammar_terms(tmp_path):
     conn = init_db(str(tmp_path / "t.db"))
     conn.execute("INSERT INTO articles(url,title,text,status) VALUES('u','t','short text','pending')")

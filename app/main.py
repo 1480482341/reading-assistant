@@ -1,4 +1,6 @@
 import json
+import shutil
+from contextlib import asynccontextmanager
 from datetime import date
 from pathlib import Path
 
@@ -7,6 +9,7 @@ from fastapi.responses import FileResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.analyze import AnalysisError, Runner, analyze_snippet
+from app.collect import ingest_text, ingest_url, start_startup_job
 from app.db import connect, init_db, insert_occurrence, upsert_entry
 from app.export import export_csv, export_markdown
 from app.review import due_queue, grade
@@ -17,11 +20,46 @@ WEB_DIR = Path(__file__).resolve().parent.parent / "web"
 
 
 def create_app(db_path: str, runner: Runner | None = None) -> FastAPI:
-    app = FastAPI(title="Reading Assistant")
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        start_startup_job(db_path, runner)
+        yield
+
+    app = FastAPI(title="Reading Assistant", lifespan=lifespan)
     init_db(db_path).close()
 
     def open_db():
         return connect(db_path)
+
+    @app.get("/api/health")
+    def health():
+        conn = open_db()
+        try:
+            conn.execute("SELECT 1").fetchone()
+            db_status = "ok"
+        except Exception:
+            db_status = "error"
+        finally:
+            conn.close()
+        return {"claude_available": shutil.which("claude") is not None, "db": db_status}
+
+    @app.post("/api/articles/ingest")
+    def ingest(body: dict):
+        conn = open_db()
+        try:
+            if str(body.get("text") or "").strip():
+                article_id = ingest_text(conn, str(body.get("title") or "Untitled"),
+                                         str(body["text"]), str(body.get("topic") or "manual"))
+            elif str(body.get("url") or "").strip():
+                article_id = ingest_url(conn, str(body["url"]).strip(),
+                                        str(body.get("topic") or "manual"))
+            else:
+                raise HTTPException(status_code=400, detail="需要 text 或 url")
+            if article_id is None:
+                raise HTTPException(status_code=422, detail="正文过短或为空，未入库")
+            return {"article_id": article_id}
+        finally:
+            conn.close()
 
     @app.get("/api/lookup")
     def lookup(article_id: int, text: str):

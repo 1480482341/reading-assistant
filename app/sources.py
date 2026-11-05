@@ -1,9 +1,17 @@
 import sqlite3
+import urllib.request
 
 import feedparser
 import trafilatura
 
 MIN_WORDS = 400
+USER_AGENT = "reading-assistant/1.0"
+
+
+def fetch_bytes(url: str, timeout: int = 30) -> bytes:
+    req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        return resp.read()
 
 DEFAULT_SOURCES = [
     ("Quanta Magazine", "https://www.quantamagazine.org/feed/", "tech", ""),

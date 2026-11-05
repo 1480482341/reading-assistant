@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8">
+  <title>Reading Assistant</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">Reading&nbsp;Assistant</div>
+    <nav>
+      <a href="/" class="active">阅读</a>
+      <a href="/review">复习</a>
+      <a href="/api/export?format=md">导出</a>
+    </nav>
+  </header>
+
+  <main class="layout">
+    <section class="reader">
+      <h1 id="article-title">载入中…</h1>
+      <div class="meta" id="article-meta"></div>
+      <article id="article-body"></article>
+    </section>
+
+    <aside class="sidebar" id="sidebar">
+      <div class="side-head">本篇已标记</div>
+      <ul id="marked-list"></ul>
+      <div class="side-head">语法点</div>
+      <ul id="grammar-list"></ul>
+    </aside>
+  </main>
+
+  <div class="popup" id="popup" hidden>
+    <div class="popup-term" id="popup-term"></div>
+    <div class="popup-gloss" id="popup-gloss"></div>
+    <div class="popup-why" id="popup-why"></div>
+    <div class="popup-actions">
+      <button id="popup-save">记下来</button>
+      <button id="popup-close" class="ghost">关闭</button>
+    </div>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

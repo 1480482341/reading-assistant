@@ -1,11 +1,17 @@
 import json
+from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import FileResponse, PlainTextResponse
+from fastapi.staticfiles import StaticFiles
 
 from app.analyze import AnalysisError, Runner, analyze_snippet
 from app.db import connect, init_db, insert_occurrence, upsert_entry
+from app.export import export_csv, export_markdown
+from app.sources import pick_today
 
 MAX_SELECTION = 500
+WEB_DIR = Path(__file__).resolve().parent.parent / "web"
 
 
 def create_app(db_path: str, runner: Runner | None = None) -> FastAPI:
@@ -68,6 +74,47 @@ def create_app(db_path: str, runner: Runner | None = None) -> FastAPI:
             return {"recorded": recorded, "entry_id": entry_id}
         finally:
             conn.close()
+
+    @app.get("/api/articles/today")
+    def articles_today():
+        conn = open_db()
+        try:
+            return pick_today(conn)
+        finally:
+            conn.close()
+
+    @app.get("/api/articles/{article_id}")
+    def article_detail(article_id: int):
+        conn = open_db()
+        try:
+            row = conn.execute(
+                "SELECT id, title, source, topic, word_count, status, text "
+                "FROM articles WHERE id = ?", (article_id,),
+            ).fetchone()
+            if row is None:
+                raise HTTPException(status_code=404, detail="文章不存在")
+            return dict(row)
+        finally:
+            conn.close()
+
+    @app.get("/api/export")
+    def export(format: str = "md"):
+        conn = open_db()
+        try:
+            if format == "csv":
+                return PlainTextResponse(export_csv(conn),
+                                         media_type="text/csv; charset=utf-8")
+            return PlainTextResponse(export_markdown(conn),
+                                     media_type="text/markdown; charset=utf-8")
+        finally:
+            conn.close()
+
+    if WEB_DIR.exists():
+        app.mount("/static", StaticFiles(directory=str(WEB_DIR)), name="static")
+
+        @app.get("/")
+        def index():
+            return FileResponse(WEB_DIR / "index.html")
 
     return app
 

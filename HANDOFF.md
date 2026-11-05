@@ -3,60 +3,42 @@
 - 日期：2026-11-05
 - 分支：feat/reading-assistant
 - 项目根：E:\AI_Project\reading-assistant
-- 状态：**10 / 12 任务完成，真实运行验证未通过，需要修一处预分析超时**
+- 状态：**12 / 12 任务完成，54 个测试全绿，真实文章与浏览器交互均已验证，最终审查的两个 Critical 已修复**
 
-## 1. 已完成的核心逻辑与关键决策
+## 1. 交付内容
 
-- 设计文档已定稿并获批准：E:\AI_Project\plan\2026-11-05-reading-assistant-design.md
-- 实施计划（12 个任务，含每步的失败测试与判据）：E:\AI_Project\reading-assistant\docs\superpowers\plans\2026-11-05-reading-assistant.md
-- 已完成并提交的任务：1 骨架与数据库、2 词条归并与频次、3 RSS 采集与正文提取、4 预分析（分块/JSON 容错/术语映射）、5 划词查询与确认接口、6 每日队列与方向轮换、7 复习状态机、8 导出、9 阅读页前端、10 复习页前端
-- 测试现状：37 个测试全绿（唯一噪音是第三方 httpx 弃用警告，非失败）
-- 关键技术决策（均已落入代码与台账）
-  - 预分析结果不计频次，只有用户主动确认的划词才写命中记录，否则频次排序失真
-  - 词条按原形归并，释义按上下文存在每次命中上，避免一词多义互相覆盖
-  - 复习用三档间隔（今天 / 3 天 / 7 天），7 天档连续两次答对即毕业
-  - 语法点独立成条，通过受控术语表归并，避免"非限定从句"与"非谓语从句"被算成两条
-  - 不设常驻进程：打开应用时抓取与预分析在后台进行，错过批次下次补抓
-  - 订阅源按实测调整：Quanta、JSTOR Daily、Aeon（仅 essays 链接）为主源；Longreads 只提取到 194 词已移出；Hacker News 在本机连不上
-- 实测数据（重要）
-  - 单次小提示词调用约 12–13 秒
-  - 两个调用并发互不拖累
-  - **800 词一块 + "每 15 词一条" 的提示词：51 条，41.5 秒**
-  - **2000 词一块要求 150–200 条：超过 120 秒超时，真实运行失败**
+一个本地阅读工作台：启动后后台抓取 RSS、提取正文、按 800 词分块调本机 `claude -p` 预分析；阅读页划词即得释义与语法拆解，确认的词条入库并按三档间隔复习。
 
-## 2. 遗留的 Bug 与待办事项
+- 设计文档：E:\AI_Project\plan\2026-11-05-reading-assistant-design.md
+- 实施计划：docs\superpowers\plans\2026-11-05-reading-assistant.md
+- 启动：`uv run uvicorn app.main:app`（阅读 `/`，复习 `/review`）
+- 数据：`data/library.db`（单文件 SQLite）
+- 测试：`uv run pytest` → 54 passed
 
-- **阻塞项**：预分析参数与当前实现不匹配。计划里写的"2000 词一块、每篇 150–200 条"会让单次调用超时；实测 800 词 + 按词数比例要条目可以在 42 秒内完成。下一步应改默认分块大小为 800 词、把提示词改成按词数比例产出、并把单次超时从 120 秒放宽到 300 秒，然后重跑真实文章验证
-- 任务 11（端到端冒烟）进行中：集成测试已通过，但真实文章运行因上述超时未通过；README 尚未编写
-- 任务 12（手动收集、启动抓取、健康检查、降级横幅）完全未开始
-- 全分支的最终代码审查尚未进行
-- 浏览器中的实际交互（划词浮层、右栏、复习卡片）尚未人工验证
-- 旧方案尚未删除：english-immersion skill 与 12 周学习计划仍在原位，按约定需在新工具跑通并经确认后再删
-- 两个小瑕疵：git 提交身份是用临时环境变量指定的（仓库未配置 user.name/email）；测试输出有一条第三方弃用警告
+## 2. 本轮修掉的问题（按重要性）
 
-## 3. 必须遵守的约束条件
+1. **预分析超时**：2000 词/块 + 要求 150–200 条会超过 120s。改为 800 词/块、条目目标 = 词数/15、超时 300s，并让 `claude` 调用在空临时目录执行（原先会继承项目 cwd）。真实文章 2312 词 → 3 块并发 151 条 84.8s，`status=ready`。
+2. **确认的词条不进复习队列**（审查 Critical）：`record_occurrence` 从不建 review 行，复习永远为空。现已接线，并回填了本机已有词条。
+3. **复习列表存储型 XSS**（审查 Critical）：`review.js` 用 `innerHTML` 拼接来自文章文本的 lemma/gloss。改为 `/api/entries` + DOM `textContent`。
+4. 单块失败不再丢弃整篇结果；卡在 `running` 的预分析启动时重试；长选区改为截断而非静默丢弃；语法点登记进 `grammar_terms`；ingest 接口支持 `pdf_path`；预分析成功后文章状态置 `ready`。
+5. 模型不可用时的顶部横幅与「只记录、不分析」降级（设计 §风险表要求）。
 
-- 模型通道只用本机 claude 命令行，不引入 API key，调用时工作目录设为空的临时目录
-- 所有模型输出必须按 JSON 解析，失败重试一次，再失败标记该块失败且不影响阅读
-- 预分析结果绝不写入命中记录；频次只来自用户确认的查询
-- 数据库为单文件 SQLite，位置 data/library.db；无守护进程
-- 前端为原生 JS，无 npm、无构建步骤；界面文案中文，代码与注释英文
-- 开发方式：严格 RED→GREEN，每个任务结束跑全量测试并提交；偏差必须写进台账
-- 台账位置：E:\AI_Project\reading-assistant\.superpowers\sdd\2026-11-05-reading-assistant\progress.md（该目录被 git 忽略，不会随仓库走，新对话需要它请先确认存在）
-- 破坏性操作（删 skill、删计划文件）执行前必须再次向用户确认
+## 3. 已知遗留（非阻塞）
 
-## 4. 环境与运行方式
+- 解析模型输出用的正则 `\[.*\]` 在数组后还有方括号的散文里会越界
+- 没有写入 `status='read'` 的地方，`pick_today` 的「跳过已读」是死逻辑
+- 启动时先把订阅源所有条目正文都下载一遍才按 URL 去重（约 60 次 HTTP）
+- 超时/非零退出也会重试一次（最坏 600s）；模块导入即建 `data/library.db`（依赖 cwd）
+- `POST /api/review/{id}` 对不存在词条返回 500 而非 4xx
+- git 提交身份是临时环境变量指定的，仓库仍未配置 user.name/email
 
-- Python 3.11 + uv；依赖已装好，测试命令为 uv run pytest
-- 本地启动命令为 uv run uvicorn app.main:app，默认端口 8000
-- 真实文章已在 data/library.db 中留有一篇（id=1，Quanta，2312 词），其预分析状态为 failed，可复用重跑
+## 4. 仍需用户拍板
+
+- 旧方案处置：删除 `english-immersion` skill 目录与 `E:\AI_Project\plan\english-learning-plan.md`（按流程需再次确认）
+- 分支归宿：仓库只有 `feat/reading-assistant`，没有 main；是否新建 main 并合并
 
 ## 5. 文件索引
 
-- 设计文档：E:\AI_Project\plan\2026-11-05-reading-assistant-design.md
-- 实施计划：E:\AI_Project\reading-assistant\docs\superpowers\plans\2026-11-05-reading-assistant.md
-- 台账与各任务简报：E:\AI_Project\reading-assistant\.superpowers\sdd\2026-11-05-reading-assistant\
-- 后端：app\db.py、app\sources.py、app\analyze.py、app\review.py、app\export.py、app\main.py
-- 前端：web\index.html、web\app.js、web\style.css、web\review.html、web\review.js、web\review.css
-- 测试：tests\（覆盖数据库、采集、预分析、接口、队列、复习、导出、页面、端到端）
-- 测试夹具：tests\fixtures\sample.rss、tests\fixtures\sample_article.html
+- 后端：app\db.py、sources.py、analyze.py、collect.py、review.py、export.py、main.py
+- 前端：web\index.html、app.js、style.css、review.html、review.js、review.css
+- 测试：tests\（数据库、采集、预分析、接口、队列、复习、导出、页面、收集、端到端）

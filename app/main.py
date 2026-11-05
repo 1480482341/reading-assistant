@@ -142,6 +142,18 @@ def create_app(db_path: str, runner: Runner | None = None) -> FastAPI:
         finally:
             conn.close()
 
+    @app.post("/api/articles/{article_id}/read")
+    def mark_read(article_id: int):
+        conn = open_db()
+        try:
+            cur = conn.execute("UPDATE articles SET status='read' WHERE id=?", (article_id,))
+            conn.commit()
+            if cur.rowcount == 0:
+                raise HTTPException(status_code=404, detail="文章不存在")
+            return {"ok": True}
+        finally:
+            conn.close()
+
     @app.get("/api/entries")
     def entries():
         conn = open_db()
@@ -193,4 +205,5 @@ def create_app(db_path: str, runner: Runner | None = None) -> FastAPI:
     return app
 
 
-app = create_app("data/library.db")
+DB_PATH = Path(__file__).resolve().parent.parent / "data" / "library.db"
+app = create_app(str(DB_PATH))

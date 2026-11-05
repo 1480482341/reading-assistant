@@ -121,6 +121,12 @@ document.addEventListener("mouseup", e => {
 });
 document.getElementById("popup-save").addEventListener("click", save);
 document.getElementById("popup-close").addEventListener("click", () => { popup.hidden = true; });
+document.getElementById("mark-read").addEventListener("click", async e => {
+  e.preventDefault();
+  if (!articleId) return;
+  await fetch(`/api/articles/${articleId}/read`, { method: "POST" });
+  window.location.href = "/";
+});
 
 loadArticle();
 checkHealth();

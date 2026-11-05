@@ -38,6 +38,10 @@ class AnalysisError(Exception):
     pass
 
 
+class ModelCallError(AnalysisError):
+    """The model call itself failed (missing binary, timeout, non-zero exit)."""
+
+
 def chunk_text(text: str, words_per_chunk: int = DEFAULT_CHUNK_WORDS) -> list[str]:
     words = text.split()
     if not words:
@@ -54,10 +58,20 @@ def _loads_array(raw: str) -> list:
     try:
         data = json.loads(raw)
     except json.JSONDecodeError:
-        match = re.search(r"\[.*\]", raw, re.S)
-        if not match:
+        data = None
+        decoder = json.JSONDecoder()
+        for pos, char in enumerate(raw):
+            if char != "[":
+                continue
+            try:
+                candidate, _ = decoder.raw_decode(raw, pos)
+            except json.JSONDecodeError:
+                continue
+            if isinstance(candidate, list):
+                data = candidate
+                break
+        if data is None:
             raise
-        data = json.loads(match.group(0))
     if not isinstance(data, list):
         raise AnalysisError("模型输出不是数组")
     return data
@@ -93,7 +107,7 @@ def model_cwd() -> str:
 def run_claude(prompt: str, timeout: int = DEFAULT_TIMEOUT) -> str:
     binary = shutil.which("claude")
     if not binary:
-        raise AnalysisError("找不到 claude 可执行文件")
+        raise ModelCallError("找不到 claude 可执行文件")
     cmd = ["cmd", "/c", binary] if os.name == "nt" else [binary]
     cmd += ["-p", "--output-format", "json"]
     try:
@@ -101,14 +115,23 @@ def run_claude(prompt: str, timeout: int = DEFAULT_TIMEOUT) -> str:
                               encoding="utf-8", errors="replace", timeout=timeout,
                               cwd=model_cwd())
     except subprocess.TimeoutExpired as exc:
-        raise AnalysisError(f"模型调用超时（{timeout}s）") from exc
+        raise ModelCallError(f"模型调用超时（{timeout}s）") from exc
     if proc.returncode != 0:
-        raise AnalysisError(f"claude 退出码 {proc.returncode}: {proc.stderr[:200]}")
+        raise ModelCallError(f"claude 退出码 {proc.returncode}: {proc.stderr[:200]}")
     try:
         outer = json.loads(proc.stdout)
     except json.JSONDecodeError:
         return proc.stdout
     return outer.get("result", proc.stdout)
+
+
+def _run_with_retry(runner: Runner, prompt: str) -> list[dict]:
+    try:
+        return parse_items(runner(prompt))
+    except ModelCallError:
+        raise
+    except AnalysisError:
+        return parse_items(runner(prompt + "\n\nReturn ONLY the JSON array."))
 
 
 SNIPPET_TEMPLATE = """A reader selected "{term}" in the sentence below.
@@ -139,10 +162,7 @@ def analyze_snippet(conn: sqlite3.Connection, article_id: int, needle: str,
     body = row["text"] if row else ""
     sentence = find_sentence(body, needle)
     prompt = SNIPPET_TEMPLATE.format(term=needle, sentence=sentence)
-    try:
-        items = parse_items(runner(prompt))
-    except AnalysisError:
-        items = parse_items(runner(prompt + "\n\nReturn ONLY the JSON array."))
+    items = _run_with_retry(runner, prompt)
     if not items:
         raise AnalysisError("模型未返回条目")
     item = items[0]
@@ -163,11 +183,7 @@ def map_grammar_term(conn: sqlite3.Connection, label: str) -> int:
 
 
 def _analyse_chunk(runner: Runner, chunk: str) -> list[dict]:
-    prompt = build_preanalysis_prompt(chunk)
-    try:
-        return parse_items(runner(prompt))
-    except AnalysisError:
-        return parse_items(runner(prompt + "\n\nReturn ONLY the JSON array."))
+    return _run_with_retry(runner, build_preanalysis_prompt(chunk))
 
 
 def analyze_article(conn: sqlite3.Connection, article_id: int,

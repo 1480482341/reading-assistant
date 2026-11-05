@@ -78,3 +78,23 @@ def test_ingest_endpoint_accepts_pdf_path(tmp_path, monkeypatch):
     c = TestClient(create_app(db))
     r = c.post("/api/articles/ingest", json={"pdf_path": "C:/tmp/x.pdf"})
     assert r.json() == {"article_id": 7}
+
+
+def test_collect_skips_known_urls_before_downloading(tmp_path, monkeypatch):
+    db = str(tmp_path / "t.db")
+    conn = init_db(db)
+    conn.execute("INSERT INTO articles(url,title,text) VALUES('https://aeon.co/essays/one','Old','word ' * 500)")
+    conn.execute("INSERT INTO sources(name, feed_url, topic, link_pattern, enabled) "
+                 "VALUES('Aeon', 'https://feed', 'humanities', '/essays/', 1)")
+    conn.commit()
+    fetched = []
+
+    def fake_fetch(url, timeout=30):
+        fetched.append(url)
+        if url == "https://feed":
+            return FEED
+        return ("<html><body><p>" + "word " * 500 + "</p></body></html>").encode()
+
+    monkeypatch.setattr("app.collect.fetch_bytes", fake_fetch)
+    collect_new(conn)
+    assert "https://aeon.co/essays/one" not in fetched

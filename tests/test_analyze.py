@@ -142,3 +142,45 @@ def test_grammar_items_register_in_grammar_terms(tmp_path):
     aid = conn.execute("SELECT id FROM articles").fetchone()["id"]
     analyze_article(conn, aid, runner=lambda p: '[{"term":"插入语","type":"grammar"}]')
     assert conn.execute("SELECT 1 FROM grammar_terms WHERE label='插入语'").fetchone()
+
+
+def test_parse_tolerates_brackets_in_surrounding_prose():
+    raw = '[{"term":"run","type":"word"}] Hope this helps. [done]'
+    assert parse_items(raw)[0]["term"] == "run"
+
+
+def test_parse_failure_is_retried_once(tmp_path):
+    from app.analyze import analyze_snippet
+    conn = init_db(str(tmp_path / "t.db"))
+    conn.execute("INSERT INTO articles(url,title,text) VALUES('u','t','albeit short')")
+    conn.commit()
+    calls = []
+
+    def runner(prompt):
+        calls.append(1)
+        return "garbage" if len(calls) == 1 else '[{"term":"albeit"}]'
+
+    assert analyze_snippet(conn, 1, "albeit", runner=runner)["term"] == "albeit"
+    assert len(calls) == 2
+
+
+def test_model_call_failure_is_not_retried(tmp_path):
+    from app.analyze import analyze_snippet, ModelCallError
+    conn = init_db(str(tmp_path / "t.db"))
+    conn.execute("INSERT INTO articles(url,title,text) VALUES('u','t','albeit short')")
+    conn.commit()
+    calls = []
+
+    def runner(prompt):
+        calls.append(1)
+        raise ModelCallError("timeout")
+
+    with pytest.raises(ModelCallError):
+        analyze_snippet(conn, 1, "albeit", runner=runner)
+    assert len(calls) == 1
+
+
+def test_default_db_path_is_absolute():
+    import app.main as main
+    assert main.DB_PATH.is_absolute()
+    assert main.DB_PATH.as_posix().endswith("data/library.db")

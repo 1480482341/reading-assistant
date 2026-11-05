@@ -7,6 +7,7 @@ from pathlib import Path
 
 from app.analyze import Runner, analyze_article
 from app.db import connect
+from app.metadata import enrich_metadata
 from app.sources import fetch_bytes, fetch_items, ingest_article, seed_sources
 
 logger = logging.getLogger(__name__)
@@ -98,8 +99,10 @@ def startup_job(db_path: str, runner: Runner | None = None) -> None:
     conn = connect(db_path)
     try:
         added = collect_new(conn)
+        titled = enrich_metadata(conn, runner)
         analysed = analyze_pending(conn, runner)
-        logger.info("启动任务完成: 新增 %s 篇, 预分析 %s 篇", added, analysed)
+        logger.info("启动任务完成: 新增 %s 篇, 元数据 %s 篇, 预分析 %s 篇",
+                    added, titled, analysed)
     except Exception:
         logger.warning("启动任务失败", exc_info=True)
     finally:

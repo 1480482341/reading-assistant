@@ -213,6 +213,10 @@ def create_app(db_path: str, runner: Runner | None = None) -> FastAPI:
         def review_page():
             return FileResponse(WEB_DIR / "review.html")
 
+        @app.get("/library")
+        def library_page():
+            return FileResponse(WEB_DIR / "library.html")
+
     return app
 
 

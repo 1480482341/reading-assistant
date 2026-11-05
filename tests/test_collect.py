@@ -98,3 +98,17 @@ def test_collect_skips_known_urls_before_downloading(tmp_path, monkeypatch):
     monkeypatch.setattr("app.collect.fetch_bytes", fake_fetch)
     collect_new(conn)
     assert "https://aeon.co/essays/one" not in fetched
+
+
+def test_startup_job_enriches_before_analysis(tmp_path, monkeypatch):
+    db = str(tmp_path / "t.db")
+    init_db(db).close()
+    order = []
+    monkeypatch.setattr("app.collect.collect_new", lambda conn: order.append("collect") or 0)
+    monkeypatch.setattr("app.collect.enrich_metadata",
+                        lambda conn, runner=None: order.append("enrich") or 0)
+    monkeypatch.setattr("app.collect.analyze_pending",
+                        lambda conn, runner=None: order.append("analyze") or 0)
+    from app.collect import startup_job
+    startup_job(db)
+    assert order == ["collect", "enrich", "analyze"]

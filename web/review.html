@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8">
+  <title>复习 · Reading Assistant</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <link rel="stylesheet" href="/static/review.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">Reading&nbsp;Assistant</div>
+    <nav>
+      <a href="/">阅读</a>
+      <a href="/review" class="active">复习</a>
+      <a href="/api/export?format=csv">导出 CSV</a>
+    </nav>
+  </header>
+
+  <main class="review-wrap">
+    <div class="review-progress">
+      <span id="progress-text">— / —</span>
+      <button id="toggle-list" class="ghost">看列表</button>
+    </div>
+
+    <section id="card-view">
+      <div class="review-card" id="review-card" hidden>
+        <div class="card-word" id="card-word"></div>
+        <div class="card-gloss" id="card-gloss"></div>
+        <div class="card-sentence" id="card-sentence"></div>
+        <div class="card-actions">
+          <button id="btn-unknown" class="ghost">不认识</button>
+          <button id="btn-known">认识</button>
+        </div>
+      </div>
+      <p class="empty" id="empty-state" hidden>今天没有要复习的。</p>
+    </section>
+
+    <section id="list-view" hidden>
+      <table class="review-table">
+        <thead><tr><th>词条</th><th>释义</th><th>频次</th></tr></thead>
+        <tbody id="list-body"></tbody>
+      </table>
+    </section>
+  </main>
+
+  <script src="/static/review.js"></script>
+</body>
+</html>

@@ -1,4 +1,5 @@
 import json
+from datetime import date
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
@@ -8,6 +9,7 @@ from fastapi.staticfiles import StaticFiles
 from app.analyze import AnalysisError, Runner, analyze_snippet
 from app.db import connect, init_db, insert_occurrence, upsert_entry
 from app.export import export_csv, export_markdown
+from app.review import due_queue, grade
 from app.sources import pick_today
 
 MAX_SELECTION = 500
@@ -109,12 +111,33 @@ def create_app(db_path: str, runner: Runner | None = None) -> FastAPI:
         finally:
             conn.close()
 
+    @app.get("/api/review/queue")
+    def review_queue():
+        conn = open_db()
+        try:
+            return [dict(r) for r in due_queue(conn, date.today().isoformat())]
+        finally:
+            conn.close()
+
+    @app.post("/api/review/{entry_id}")
+    def review_grade(entry_id: int, body: dict):
+        conn = open_db()
+        try:
+            grade(conn, entry_id, bool(body.get("known")), date.today().isoformat())
+            return {"ok": True}
+        finally:
+            conn.close()
+
     if WEB_DIR.exists():
         app.mount("/static", StaticFiles(directory=str(WEB_DIR)), name="static")
 
         @app.get("/")
         def index():
             return FileResponse(WEB_DIR / "index.html")
+
+        @app.get("/review")
+        def review_page():
+            return FileResponse(WEB_DIR / "review.html")
 
     return app
 

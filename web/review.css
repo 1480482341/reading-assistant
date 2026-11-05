@@ -1,0 +1,94 @@
+.review-wrap {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 40px 32px 96px;
+}
+
+.review-progress {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: var(--muted);
+  font-family: -apple-system, "Segoe UI", sans-serif;
+  font-size: 13px;
+  margin-bottom: 24px;
+}
+
+.review-progress .ghost {
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--muted);
+  border-radius: 5px;
+  padding: 5px 10px;
+  cursor: pointer;
+}
+
+.review-card {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+  padding: 36px 32px;
+  text-align: center;
+}
+
+.card-word {
+  font-size: 34px;
+  color: var(--accent);
+  margin-bottom: 6px;
+}
+.card-gloss {
+  font-size: 17px;
+  color: var(--muted);
+  margin-bottom: 24px;
+  font-family: -apple-system, "Segoe UI", sans-serif;
+}
+.card-sentence {
+  font-size: 17px;
+  line-height: 1.7;
+  text-align: left;
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
+}
+
+.card-actions { display: flex; gap: 12px; margin-top: 28px; }
+.card-actions button {
+  flex: 1;
+  padding: 11px;
+  border-radius: 6px;
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: #fff;
+  font-size: 14px;
+  cursor: pointer;
+}
+.card-actions button.ghost {
+  background: transparent;
+  color: var(--muted);
+  border-color: var(--line);
+}
+
+.empty {
+  text-align: center;
+  color: var(--muted);
+  padding: 60px 0;
+  font-family: -apple-system, "Segoe UI", sans-serif;
+}
+
+.review-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: -apple-system, "Segoe UI", sans-serif;
+  font-size: 14px;
+}
+.review-table th {
+  text-align: left;
+  color: var(--muted);
+  font-weight: 500;
+  font-size: 12px;
+  padding: 8px 6px;
+  border-bottom: 1px solid var(--line);
+}
+.review-table td {
+  padding: 9px 6px;
+  border-bottom: 1px solid var(--line);
+}

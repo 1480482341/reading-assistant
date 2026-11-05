@@ -1,0 +1,56 @@
+import pytest
+from fastapi.testclient import TestClient
+
+from app.db import init_db
+from app.collect import ingest_text, collect_new
+from app.main import create_app
+
+
+def test_ingest_text_creates_article(tmp_path):
+    conn = init_db(str(tmp_path / "t.db"))
+    aid = ingest_text(conn, "Pasted", "world " * 500, "manual")
+    assert conn.execute("SELECT title FROM articles WHERE id=?", (aid,)).fetchone()["title"] == "Pasted"
+
+
+def test_ingest_rejects_empty_text(tmp_path):
+    conn = init_db(str(tmp_path / "t.db"))
+    with pytest.raises(ValueError):
+        ingest_text(conn, "Empty", "   ", "manual")
+
+
+def test_health_reports_missing_model(tmp_path, monkeypatch):
+    db = str(tmp_path / "t.db")
+    init_db(db).close()
+    monkeypatch.setattr("app.main.shutil.which", lambda name: None)
+    r = TestClient(create_app(db)).get("/api/health")
+    assert r.json()["claude_available"] is False
+
+
+FEED = b"""<?xml version="1.0"?><rss version="2.0"><channel>
+<item><title>Essay</title><link>https://aeon.co/essays/one</link></item>
+<item><title>Video</title><link>https://aeon.co/videos/two</link></item>
+</channel></rss>"""
+
+
+def test_collect_new_filters_links_by_source_pattern(tmp_path, monkeypatch):
+    db = str(tmp_path / "t.db")
+    conn = init_db(db)
+    conn.execute("INSERT INTO sources(name, feed_url, topic, link_pattern, enabled) "
+                 "VALUES('Aeon', 'https://feed', 'humanities', '/essays/', 1)")
+    conn.commit()
+    monkeypatch.setattr("app.collect.fetch_bytes",
+                        lambda url, timeout=30: FEED if url == "https://feed"
+                        else ("<html><body><p>" + "word " * 500 + "</p></body></html>").encode())
+    collect_new(conn)
+    rows = conn.execute("SELECT url FROM articles").fetchall()
+    assert [r["url"] for r in rows] == ["https://aeon.co/essays/one"]
+
+
+def test_ingest_endpoint_accepts_pasted_text(tmp_path):
+    db = str(tmp_path / "t.db")
+    init_db(db).close()
+    c = TestClient(create_app(db))
+    r = c.post("/api/articles/ingest", json={"title": "Pasted", "text": "world " * 500})
+    assert r.status_code == 200
+    assert r.json()["article_id"] > 0
+    assert c.post("/api/articles/ingest", json={}).status_code == 400

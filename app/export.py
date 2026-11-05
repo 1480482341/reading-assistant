@@ -19,11 +19,15 @@ ORDER BY count DESC, e.lemma ASC
 HEADER = ["kind", "lemma", "count", "gloss", "sentence", "article_url"]
 
 
+def entry_rows(conn: sqlite3.Connection) -> list[sqlite3.Row]:
+    return conn.execute(QUERY).fetchall()
+
+
 def export_csv(conn: sqlite3.Connection) -> str:
     buf = io.StringIO()
     writer = csv.writer(buf, lineterminator="\n")
     writer.writerow(HEADER)
-    for row in conn.execute(QUERY):
+    for row in entry_rows(conn):
         writer.writerow([row[k] for k in HEADER])
     return buf.getvalue()
 
@@ -31,7 +35,7 @@ def export_csv(conn: sqlite3.Connection) -> str:
 def export_markdown(conn: sqlite3.Connection) -> str:
     lines = ["# Vocabulary", "", "| Kind | Lemma | Count | Gloss | Sentence | Source |",
              "|---|---|---|---|---|---|"]
-    for row in conn.execute(QUERY):
+    for row in entry_rows(conn):
         sentence = str(row["sentence"]).replace("|", "\\|")
         lines.append(
             f"| {row['kind']} | {row['lemma']} | {row['count']} | "

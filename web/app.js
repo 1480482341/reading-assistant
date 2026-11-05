@@ -60,8 +60,8 @@ function showPopup(rect, item, text) {
 
 async function onSelect() {
   const sel = window.getSelection();
-  const text = String(sel).trim();
-  if (!text || text.length > 500 || !articleId) return;
+  const text = String(sel).trim().slice(0, 500);
+  if (!text || !articleId) return;
   const rect = sel.getRangeAt(0).getBoundingClientRect();
 
   const res = await fetch(

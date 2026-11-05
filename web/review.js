@@ -37,12 +37,17 @@ async function load() {
   queue = await fetch("/api/review/queue").then(r => r.json());
   index = 0;
   render();
-  const rows = await fetch("/api/export?format=csv").then(r => r.text());
+  const rows = await fetch("/api/entries").then(r => r.json());
   const body = document.getElementById("list-body");
-  body.innerHTML = rows.trim().split("\n").slice(1).filter(Boolean).map(line => {
-    const [kind, lemma, count, gloss] = line.split(",");
-    return `<tr><td>${lemma}</td><td>${gloss || ""}</td><td>${count}</td></tr>`;
-  }).join("");
+  body.replaceChildren(...rows.map(row => {
+    const tr = document.createElement("tr");
+    for (const value of [row.lemma, row.gloss || "", row.count]) {
+      const td = document.createElement("td");
+      td.textContent = String(value);
+      tr.appendChild(td);
+    }
+    return tr;
+  }));
 }
 
 document.getElementById("btn-known").addEventListener("click", () => answer(true));

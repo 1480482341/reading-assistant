@@ -110,3 +110,35 @@ def test_successful_analysis_marks_article_ready(tmp_path):
     aid = conn.execute("SELECT id FROM articles").fetchone()["id"]
     analyze_article(conn, aid, runner=lambda p: '[{"term":"run","type":"word"}]')
     assert conn.execute("SELECT status FROM articles WHERE id=?", (aid,)).fetchone()["status"] == "ready"
+
+
+def test_find_sentence_uses_selection_when_not_found(tmp_path):
+    from app.analyze import find_sentence
+    assert find_sentence("Alpha. Beta.", "gamma " * 100).startswith("gamma")
+
+
+def test_partial_chunk_failure_keeps_successful_items(tmp_path):
+    conn = init_db(str(tmp_path / "t.db"))
+    text = " ".join(["good"] * 800 + ["boom"] + ["good"] * 799)
+    conn.execute("INSERT INTO articles(url,title,text,status) VALUES('u','t',?,'pending')", (text,))
+    conn.commit()
+    aid = conn.execute("SELECT id FROM articles").fetchone()["id"]
+
+    def runner(prompt):
+        if "boom" in prompt:
+            raise AnalysisError("boom chunk failed")
+        return '[{"term":"good","type":"word"}]'
+
+    analyze_article(conn, aid, runner=runner)
+    row = conn.execute("SELECT status, payload_json FROM analysis WHERE article_id=?", (aid,)).fetchone()
+    assert row["status"] == "ready"
+    assert "good" in row["payload_json"]
+
+
+def test_grammar_items_register_in_grammar_terms(tmp_path):
+    conn = init_db(str(tmp_path / "t.db"))
+    conn.execute("INSERT INTO articles(url,title,text,status) VALUES('u','t','short text','pending')")
+    conn.commit()
+    aid = conn.execute("SELECT id FROM articles").fetchone()["id"]
+    analyze_article(conn, aid, runner=lambda p: '[{"term":"插入语","type":"grammar"}]')
+    assert conn.execute("SELECT 1 FROM grammar_terms WHERE label='插入语'").fetchone()

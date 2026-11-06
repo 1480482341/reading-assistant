@@ -5,6 +5,13 @@
   <title>文章库 · Reading Assistant</title>
   <link rel="stylesheet" href="/static/style.css">
   <link rel="stylesheet" href="/static/library.css">
+  <script>
+  (function () {
+    var t = localStorage.getItem("ra-theme");
+    if (["eye-green","dark","light","eye-warm"].indexOf(t) < 0) t = "eye-green";
+    document.documentElement.dataset.theme = t;
+  })();
+  </script>
 </head>
 <body>
   <header class="topbar">
@@ -14,6 +21,7 @@
       <a href="/library" class="active">文章库</a>
       <a href="/review">复习</a>
       <a href="/api/export?format=md">导出</a>
+      <button id="theme-toggle" class="theme-toggle">护眼绿</button>
     </nav>
   </header>
 
@@ -32,6 +40,7 @@
     <p class="empty" id="empty-state" hidden>没有匹配的文章。</p>
   </main>
 
+  <script src="/static/theme.js"></script>
   <script src="/static/library.js"></script>
 </body>
 </html>

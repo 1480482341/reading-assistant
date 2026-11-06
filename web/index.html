@@ -4,6 +4,13 @@
   <meta charset="utf-8">
   <title>Reading Assistant</title>
   <link rel="stylesheet" href="/static/style.css">
+  <script>
+  (function () {
+    var t = localStorage.getItem("ra-theme");
+    if (["eye-green","dark","light","eye-warm"].indexOf(t) < 0) t = "eye-green";
+    document.documentElement.dataset.theme = t;
+  })();
+  </script>
 </head>
 <body>
   <header class="topbar">
@@ -14,6 +21,7 @@
       <a href="/review">复习</a>
       <a href="#" id="mark-read">读完了</a>
       <a href="/api/export?format=md">导出</a>
+      <button id="theme-toggle" class="theme-toggle">护眼绿</button>
     </nav>
   </header>
 
@@ -47,6 +55,7 @@
     </div>
   </div>
 
+  <script src="/static/theme.js"></script>
   <script src="/static/app.js"></script>
 </body>
 </html>

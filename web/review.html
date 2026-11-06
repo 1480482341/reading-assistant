@@ -5,6 +5,13 @@
   <title>复习 · Reading Assistant</title>
   <link rel="stylesheet" href="/static/style.css">
   <link rel="stylesheet" href="/static/review.css">
+  <script>
+  (function () {
+    var t = localStorage.getItem("ra-theme");
+    if (["eye-green","dark","light","eye-warm"].indexOf(t) < 0) t = "eye-green";
+    document.documentElement.dataset.theme = t;
+  })();
+  </script>
 </head>
 <body>
   <header class="topbar">
@@ -14,6 +21,7 @@
       <a href="/library">文章库</a>
       <a href="/review" class="active">复习</a>
       <a href="/api/export?format=csv">导出 CSV</a>
+      <button id="theme-toggle" class="theme-toggle">护眼绿</button>
     </nav>
   </header>
 
@@ -44,6 +52,7 @@
     </section>
   </main>
 
+  <script src="/static/theme.js"></script>
   <script src="/static/review.js"></script>
 </body>
 </html>

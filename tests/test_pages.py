@@ -59,3 +59,31 @@ def test_review_page_links_library(tmp_path):
     init_db(db).close()
     html = TestClient(create_app(db)).get("/review").text
     assert 'href="/library"' in html
+
+
+def _html(path, tmp_path):
+    db = str(tmp_path / "t.db")
+    init_db(db).close()
+    return TestClient(create_app(db)).get(path).text
+
+
+def test_style_defines_four_themes(tmp_path):
+    db = str(tmp_path / "t.db")
+    init_db(db).close()
+    css = TestClient(create_app(db)).get("/static/style.css").text
+    for theme in ("eye-green", "dark", "light", "eye-warm"):
+        assert f'[data-theme="{theme}"]' in css
+
+
+def test_every_page_sets_theme_before_render_and_has_toggle(tmp_path):
+    for path in ("/", "/library", "/review"):
+        html = _html(path, tmp_path)
+        assert "ra-theme" in html
+        assert 'id="theme-toggle"' in html
+        assert "/static/theme.js" in html
+
+
+def test_inline_theme_script_falls_back_to_eye_green(tmp_path):
+    html = _html("/", tmp_path)
+    assert 'localStorage.getItem("ra-theme")' in html
+    assert 't = "eye-green"' in html

@@ -38,7 +38,7 @@
 .filters button.active {
   border-color: var(--accent);
   background: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
 }
 
 .article-list {

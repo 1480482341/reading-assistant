@@ -103,3 +103,12 @@ def test_sidebar_scrolls_independently(tmp_path):
     init_db(db).close()
     css = TestClient(create_app(db)).get("/static/style.css").text
     assert "overflow-y: auto" in css
+
+
+def test_reading_script_renders_annotations_and_loads_marks(tmp_path):
+    db = str(tmp_path / "t.db")
+    init_db(db).close()
+    js = TestClient(create_app(db)).get("/static/app.js").text
+    for needle in ("function paragraphs", "function renderBody",
+                   "hl-", "data-annotation-id", "/marks"):
+        assert needle in js

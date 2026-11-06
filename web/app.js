@@ -1,6 +1,9 @@
 let articleId = null;
 let current = null;
 let popupToken = 0;
+let full = null;
+let annotations = [];
+let bookmarks = [];
 
 const popup = document.getElementById("popup");
 const bodyEl = document.getElementById("article-body");
@@ -29,13 +32,49 @@ function hidePopup() {
 
 function showMessage(title, body) {
   articleId = null;
+  full = null;
+  annotations = [];
+  bookmarks = [];
   document.getElementById("article-title").textContent = title;
   document.getElementById("article-title-zh").hidden = true;
   document.getElementById("article-meta").textContent = "";
   bodyEl.textContent = body;
 }
 
-function showArticle(full) {
+// Split article text exactly like the server's app/annotations.py:
+// split_paragraphs — split on newline runs, trim each piece, drop empties.
+function paragraphs() {
+  return full.text.split(/\n+/).map(s => s.trim()).filter(Boolean);
+}
+
+// Rebuild the article body from paragraphs() and the current annotations,
+// wrapping each highlighted range in a colored span with its annotation id.
+function renderBody() {
+  const paras = paragraphs();
+  bodyEl.innerHTML = paras.map((para, i) => {
+    const anns = annotations
+      .filter(a => a.para_index === i)
+      .sort((x, y) => x.start_offset - y.start_offset);
+    const frags = [];
+    let cursor = 0;
+    for (const a of anns) {
+      const start = Math.max(a.start_offset, cursor);
+      const end = Math.min(a.end_offset, para.length);
+      if (end <= start) continue;
+      if (start > cursor) frags.push({ text: para.slice(cursor, start) });
+      frags.push({ text: para.slice(start, end), ann: a });
+      cursor = end;
+    }
+    if (cursor < para.length) frags.push({ text: para.slice(cursor) });
+    const inner = frags.map(f => f.ann
+      ? `<span class="hl hl-${f.ann.color}" data-annotation-id="${f.ann.id}">${escapeHtml(f.text)}</span>`
+      : escapeHtml(f.text)).join("");
+    return `<p data-para="${i}">${inner}</p>`;
+  }).join("");
+}
+
+function showArticle(article) {
+  full = article;
   articleId = full.id;
   document.getElementById("article-title").textContent = full.title;
   const titleZh = document.getElementById("article-title-zh");
@@ -43,9 +82,13 @@ function showArticle(full) {
   titleZh.hidden = !full.title_zh;
   document.getElementById("article-meta").textContent =
     `${full.topic || ""} · ${full.word_count || ""} words · ${full.status}`;
-  bodyEl.innerHTML = full.text
-    .split(/\n+/).filter(Boolean)
-    .map(p => `<p>${escapeHtml(p)}</p>`).join("");
+  annotations = full.annotations || [];
+  bookmarks = full.bookmarks || [];
+  renderBody();
+  fetch(`/api/articles/${full.id}/marks`)
+    .then(r => r.json())
+    .then(renderRightPanel)
+    .catch(err => console.error("Failed to load marks:", err));
 }
 
 async function loadArticle() {
@@ -128,14 +171,28 @@ async function onSelect() {
   }
 }
 
+function appendMark(listEl, item) {
+  const li = document.createElement("li");
+  li.innerHTML = `<span class="lemma">${escapeHtml(item.term)}</span>
+                  <span class="count">${escapeHtml(item.gloss_zh || "")}</span>`;
+  listEl.appendChild(li);
+}
+
+// Fill both sidebar lists from GET /api/articles/{id}/marks.
+function renderRightPanel(marks) {
+  const markedList = document.getElementById("marked-list");
+  const grammarList = document.getElementById("grammar-list");
+  markedList.innerHTML = "";
+  grammarList.innerHTML = "";
+  for (const item of marks.occurrences || []) appendMark(markedList, item);
+  for (const item of marks.grammar || []) appendMark(grammarList, item);
+}
+
 function addToSidebar(item) {
   const list = item.type === "grammar"
     ? document.getElementById("grammar-list")
     : document.getElementById("marked-list");
-  const li = document.createElement("li");
-  li.innerHTML = `<span class="lemma">${escapeHtml(item.term)}</span>
-                  <span class="count">${escapeHtml(item.gloss_zh || "")}</span>`;
-  list.appendChild(li);
+  appendMark(list, item);
 }
 
 async function save() {

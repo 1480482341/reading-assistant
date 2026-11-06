@@ -77,6 +77,14 @@ body {
 }
 #article-body p { margin: 0 0 1.1em; }
 
+.hl { border-radius: 2px; padding: 0 1px; }
+.hl-red { background: rgba(220,70,70,.30); }
+.hl-green { background: rgba(60,170,90,.30); }
+.hl-yellow { background: rgba(230,180,40,.35); }
+[data-theme="dark"] .hl-red { background: rgba(220,70,70,.22); }
+[data-theme="dark"] .hl-green { background: rgba(60,170,90,.22); }
+[data-theme="dark"] .hl-yellow { background: rgba(230,180,40,.22); }
+
 .actions, .sidebar {
   position: sticky;
   top: 24px;

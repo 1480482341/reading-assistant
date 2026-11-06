@@ -112,3 +112,14 @@ def test_reading_script_renders_annotations_and_loads_marks(tmp_path):
     for needle in ("function paragraphs", "function renderBody",
                    "hl-", "data-annotation-id", "/marks"):
         assert needle in js
+
+
+def test_color_mode_and_selection_mapping(tmp_path):
+    db = str(tmp_path / "t.db")
+    init_db(db).close()
+    js = TestClient(create_app(db)).get("/static/app.js").text
+    for needle in ("colorMode", "selectionToRange", "applyAnnotation",
+                   "/annotations", "hl-popup"):
+        assert needle in js
+    html = TestClient(create_app(db)).get("/").text
+    assert 'id="hl-popup"' in html

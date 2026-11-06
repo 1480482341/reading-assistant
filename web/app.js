@@ -4,8 +4,12 @@ let popupToken = 0;
 let full = null;
 let annotations = [];
 let bookmarks = [];
+let colorMode = null;
+let hlTarget = null;
+let suppressHlClick = false;
 
 const popup = document.getElementById("popup");
+const hlPopup = document.getElementById("hl-popup");
 const bodyEl = document.getElementById("article-body");
 
 function escapeHtml(s) {
@@ -71,6 +75,122 @@ function renderBody() {
       : escapeHtml(f.text)).join("");
     return `<p data-para="${i}">${inner}</p>`;
   }).join("");
+}
+
+// --- Color mode: select text to highlight it in the active color. ---
+
+// Turn color mode on for `color`, or off when the same color is chosen again.
+function setColorMode(color) {
+  if (colorMode === color) color = null;
+  colorMode = color;
+  for (const b of document.querySelectorAll(".actions .swatch")) {
+    b.classList.toggle("active", colorMode === b.dataset.color);
+  }
+}
+
+// Character offset of the (container, offset) boundary within p's text
+// content, so offsets match the trimmed paragraph string the server checks.
+function offsetInPara(p, container, offset) {
+  if (container.nodeType === Node.TEXT_NODE) {
+    let pos = 0;
+    const walker = document.createTreeWalker(p, NodeFilter.SHOW_TEXT);
+    let node;
+    while ((node = walker.nextNode())) {
+      if (node === container) return pos + offset;
+      pos += node.textContent.length;
+    }
+    return pos;
+  }
+  // Element boundary: offset is a child index. Locate the element's first
+  // text node, then add the text length of the children before that index.
+  let base = -1;
+  let pos = 0;
+  const walker = document.createTreeWalker(p, NodeFilter.SHOW_TEXT);
+  let node;
+  while ((node = walker.nextNode())) {
+    if (container.contains(node)) { base = pos; break; }
+    pos += node.textContent.length;
+  }
+  if (base < 0) return p.textContent.length;
+  let before = 0;
+  for (let i = 0; i < offset && i < container.childNodes.length; i++) {
+    before += container.childNodes[i].textContent.length;
+  }
+  return base + before;
+}
+
+// Map a DOM selection to character offsets within a single paragraph.
+// A selection that starts in one <p> and ends in another is clamped to the
+// end of the start paragraph; collapsed or empty selections return null.
+function selectionToRange(sel) {
+  if (!sel || sel.rangeCount === 0) return null;
+  const range = sel.getRangeAt(0);
+  if (range.collapsed) return null;
+  const startEl = range.startContainer.nodeType === Node.TEXT_NODE
+    ? range.startContainer.parentElement : range.startContainer;
+  const p = startEl ? startEl.closest("p[data-para]") : null;
+  if (!p || !bodyEl.contains(p)) return null;
+  const start = offsetInPara(p, range.startContainer, range.startOffset);
+  const endEl = range.endContainer.nodeType === Node.TEXT_NODE
+    ? range.endContainer.parentElement : range.endContainer;
+  const end = endEl && p.contains(endEl)
+    ? offsetInPara(p, range.endContainer, range.endOffset)
+    : p.textContent.length;
+  if (start === end) return null;
+  return { paraIndex: Number(p.dataset.para), start, end };
+}
+
+// POST the range as a new annotation in the given color, then re-render.
+// The server replaces overlapping rows in the same paragraph; mirror that
+// on the local array so the UI matches the stored state.
+async function applyAnnotation(range, color) {
+  if (!articleId) return;
+  const para = paragraphs()[range.paraIndex];
+  if (!para) return;
+  try {
+    const resp = await fetch(`/api/articles/${articleId}/annotations`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        para_index: range.paraIndex,
+        start_offset: range.start,
+        end_offset: range.end,
+        quote: para.slice(range.start, range.end),
+        color,
+      }),
+    });
+    if (!resp.ok) return;
+    const ann = await resp.json();
+    annotations = annotations.filter(a =>
+      !(a.para_index === ann.para_index &&
+        a.start_offset < ann.end_offset &&
+        a.end_offset > ann.start_offset));
+    annotations.push(ann);
+    renderBody();
+  } catch (err) {
+    console.error("Failed to save annotation:", err);
+  }
+}
+
+// --- Highlight popup: recolor or remove an existing annotation. ---
+
+function hideHlPopup() {
+  hlPopup.hidden = true;
+  hlTarget = null;
+}
+
+function openHlPopup(span) {
+  hlTarget = span;
+  hidePopup();
+  for (const b of hlPopup.querySelectorAll(".swatch")) {
+    b.classList.toggle("active", span.classList.contains(`hl-${b.dataset.color}`));
+  }
+  const rect = span.getBoundingClientRect();
+  hlPopup.hidden = false;
+  const left = Math.min(window.scrollX + rect.left,
+    window.scrollX + window.innerWidth - 250);
+  hlPopup.style.left = `${left}px`;
+  hlPopup.style.top = `${window.scrollY + rect.bottom + 8}px`;
 }
 
 function showArticle(article) {
@@ -212,10 +332,80 @@ async function save() {
 }
 
 document.addEventListener("mouseup", e => {
+  if (hlPopup.contains(e.target)) return;
   if (popup.contains(e.target)) return;
-  if (!bodyEl.contains(e.target)) { hidePopup(); return; }
+  if (!bodyEl.contains(e.target)) { hidePopup(); hideHlPopup(); return; }
+  if (colorMode) {
+    const range = selectionToRange(window.getSelection());
+    if (!range) return;
+    suppressHlClick = true;
+    hideHlPopup();
+    applyAnnotation(range, colorMode);
+    return;
+  }
+  hideHlPopup();
   onSelect();
 });
+
+// Clicking a highlighted span opens the recolor popup; clicking anywhere
+// else closes it. The click right after a drag-highlight is swallowed.
+document.addEventListener("click", e => {
+  const target = e.target instanceof Element ? e.target : null;
+  const span = target ? target.closest(".hl") : null;
+  if (span) {
+    if (suppressHlClick) { suppressHlClick = false; return; }
+    openHlPopup(span);
+    return;
+  }
+  suppressHlClick = false;
+  if (!target || !hlPopup.contains(target)) hideHlPopup();
+});
+
+document.addEventListener("keydown", e => {
+  if (e.key !== "Escape") return;
+  setColorMode(null);
+  hideHlPopup();
+});
+
+for (const b of document.querySelectorAll(".actions .swatch")) {
+  b.addEventListener("click", () => setColorMode(b.dataset.color));
+}
+
+for (const b of hlPopup.querySelectorAll(".swatch")) {
+  b.addEventListener("click", async () => {
+    if (!hlTarget) return;
+    const id = hlTarget.dataset.annotationId;
+    try {
+      const resp = await fetch(`/api/annotations/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ color: b.dataset.color }),
+      });
+      if (!resp.ok) return;
+      const ann = annotations.find(a => String(a.id) === String(id));
+      if (ann) ann.color = b.dataset.color;
+      renderBody();
+      hideHlPopup();
+    } catch (err) {
+      console.error("Failed to update annotation:", err);
+    }
+  });
+}
+
+document.getElementById("hl-remove").addEventListener("click", async () => {
+  if (!hlTarget) return;
+  const id = hlTarget.dataset.annotationId;
+  try {
+    const resp = await fetch(`/api/annotations/${id}`, { method: "DELETE" });
+    if (!resp.ok) return;
+    annotations = annotations.filter(a => String(a.id) !== String(id));
+    renderBody();
+    hideHlPopup();
+  } catch (err) {
+    console.error("Failed to remove annotation:", err);
+  }
+});
+
 document.getElementById("popup-save").addEventListener("click", save);
 document.getElementById("popup-close").addEventListener("click", hidePopup);
 document.getElementById("mark-read").addEventListener("click", async e => {

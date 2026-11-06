@@ -1,12 +1,14 @@
 :root, [data-theme="light"] { --ink:#1b1b1b; --muted:#6b6b6b; --line:#e3e0da;
   --accent:#2f6fd0; --bg:#faf9f6; --panel:#ffffff; --on-accent:#ffffff;
-  --banner-bg:#fdf3d8; --banner-ink:#6b4e00; }
+  --banner-bg:#fdf3d8; --banner-ink:#6b4e00;
+  --sw-red:#dc4646; --sw-green:#3caa5a; --sw-yellow:#e6b428; }
 [data-theme="eye-green"] { --ink:#22301f; --muted:#5c6b57; --line:#bfd3b7;
   --accent:#3f7a3a; --bg:#d6e8d0; --panel:#e6f1e1; --on-accent:#ffffff;
   --banner-bg:#f3e9c4; --banner-ink:#5c4a12; }
 [data-theme="dark"] { --ink:#dfe3e8; --muted:#8b939e; --line:#2b3038;
   --accent:#6ea8fe; --bg:#14161a; --panel:#1c1f24; --on-accent:#0b0d10;
-  --banner-bg:#3a3016; --banner-ink:#e8d9a8; }
+  --banner-bg:#3a3016; --banner-ink:#e8d9a8;
+  --sw-red:#b84545; --sw-green:#37904f; --sw-yellow:#c79b1f; }
 [data-theme="eye-warm"] { --ink:#33291b; --muted:#7a6a52; --line:#e0d2b8;
   --accent:#a4632a; --bg:#f5e9c8; --panel:#fcf4e0; --on-accent:#ffffff;
   --banner-bg:#f0dfae; --banner-ink:#5c4a1a; }
@@ -134,7 +136,7 @@ body {
 .popup-term { font-weight: 600; color: var(--accent); margin-bottom: 4px; }
 .popup-gloss { margin-bottom: 6px; }
 .popup-why { color: var(--muted); line-height: 1.5; }
-.popup-actions { display: flex; gap: 8px; margin-top: 10px; }
+.popup-actions { display: flex; gap: 8px; margin-top: 10px; align-items: center; }
 .popup button {
   flex: 1;
   padding: 6px 10px;
@@ -146,6 +148,47 @@ body {
   font-size: 13px;
 }
 .popup button.ghost { background: transparent; color: var(--muted); border-color: var(--line); }
+
+/* Left actions panel buttons (bookmarks, shelf, mark-read). */
+.actions button:not(.swatch) {
+  display: block;
+  width: 100%;
+  margin: 4px 0;
+  padding: 7px 10px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--panel);
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  text-align: center;
+}
+.actions button:not(.swatch):hover { border-color: var(--accent); color: var(--accent); }
+
+/* Color swatch chips: the color-mode toggle in the actions panel and the
+   color picker inside the highlight popup. Kept after the .popup button
+   rules so these overrides win the specificity tie. */
+.swatches { display: flex; gap: 8px; align-items: center; margin: 6px 0; }
+button.swatch {
+  flex: 0 0 auto;
+  align-self: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--panel);
+  cursor: pointer;
+}
+button.swatch[data-color="red"] { background: var(--sw-red); }
+button.swatch[data-color="green"] { background: var(--sw-green); }
+button.swatch[data-color="yellow"] { background: var(--sw-yellow); }
+button.swatch.active {
+  box-shadow: 0 0 0 2px var(--panel), 0 0 0 4px var(--accent);
+}
+
+#hl-popup { width: 240px; }
 
 .banner {
   padding: 10px 32px;

@@ -253,6 +253,17 @@ def test_add_bookmark_has_inflight_guard(tmp_path):
         js.index("bookmarkPending = false", add_idx)
 
 
+def test_history_tab_disables_shelf_button_for_shelved_items(tmp_path):
+    db = str(tmp_path / "t.db")
+    init_db(db).close()
+    js = TestClient(create_app(db)).get("/static/shelf.js").text
+    # The history list resolves shelf state from the library listing and
+    # renders a disabled button instead of offering to re-add an article.
+    assert "已在书架" in js
+    assert "in_shelf" in js
+    assert " disabled" in js
+
+
 def test_error_message_resets_color_mode_and_shelf_button(tmp_path):
     db = str(tmp_path / "t.db")
     init_db(db).close()

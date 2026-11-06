@@ -53,13 +53,24 @@ function renderList(listEl, items, kind) {
     li.dataset.id = item.id;
     const marks = marksHtml(item);
     const extra = kind === "shelf" ? "" : `<div class="history-line">${historyHtml(item)}</div>`;
-    const btnLabel = kind === "shelf" ? "移出书架" : "加入书架";
+    // History rows carry no shelf state, so resolve it from the library
+    // listing and disable the button for articles already on the shelf.
+    let btnLabel;
+    let btnDisabled = false;
+    if (kind === "shelf") {
+      btnLabel = "移出书架";
+    } else {
+      const row = countsById.get(item.id);
+      const inShelf = Boolean(row && row.in_shelf);
+      btnLabel = inShelf ? "已在书架" : "加入书架";
+      btnDisabled = inShelf;
+    }
     li.innerHTML = `
       <div class="item-title">${titleHtml(item)}</div>
       <div class="meta">${metaHtml(item)}</div>
       ${marks ? `<div class="marks">${marks}</div>` : ""}
       ${extra}
-      <button class="card-btn">${btnLabel}</button>`;
+      <button class="card-btn"${btnDisabled ? " disabled" : ""}>${btnLabel}</button>`;
     const btn = li.querySelector(".card-btn");
     btn.addEventListener("click", async event => {
       event.stopPropagation();

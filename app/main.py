@@ -10,6 +10,8 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from app.analyze import AnalysisError, Runner, analyze_snippet
+from app.annotations import (add_annotation, delete_annotation,
+                             list_annotations, update_annotation_color)
 from app.collect import ingest_pdf, ingest_text, ingest_url, start_startup_job
 from app.db import connect, init_db, insert_occurrence, upsert_entry
 from app.export import entry_rows, export_csv, export_markdown
@@ -47,6 +49,18 @@ class OccurrenceBody(BaseModel):
 
 class ReviewBody(BaseModel):
     known: bool = False
+
+
+class AnnotationBody(BaseModel):
+    para_index: int
+    start_offset: int
+    end_offset: int
+    quote: str = ""
+    color: str
+
+
+class AnnotationColorBody(BaseModel):
+    color: str
 
 
 def configure_logging(level: int = logging.INFO) -> None:
@@ -183,6 +197,62 @@ def create_app(db_path: str, runner: Runner | None = None) -> FastAPI:
         conn = open_db()
         try:
             return library_rows(conn)
+        finally:
+            conn.close()
+
+    @app.get("/api/articles/{article_id:int}/annotations")
+    def article_annotations(article_id: int):
+        conn = open_db()
+        try:
+            if conn.execute("SELECT 1 FROM articles WHERE id = ?",
+                            (article_id,)).fetchone() is None:
+                raise HTTPException(status_code=404, detail="文章不存在")
+            return list_annotations(conn, article_id)
+        finally:
+            conn.close()
+
+    @app.post("/api/articles/{article_id:int}/annotations")
+    def create_annotation(article_id: int, body: AnnotationBody):
+        conn = open_db()
+        try:
+            if conn.execute("SELECT 1 FROM articles WHERE id = ?",
+                            (article_id,)).fetchone() is None:
+                raise HTTPException(status_code=404, detail="文章不存在")
+            try:
+                new_id = add_annotation(
+                    conn, article_id, body.para_index, body.start_offset,
+                    body.end_offset, body.quote, body.color)
+            except ValueError as exc:
+                raise HTTPException(status_code=422, detail=str(exc))
+            row = conn.execute(
+                "SELECT id, para_index, start_offset, end_offset, quote, color "
+                "FROM annotations WHERE id = ?", (new_id,),
+            ).fetchone()
+            return dict(row)
+        finally:
+            conn.close()
+
+    @app.patch("/api/annotations/{annotation_id:int}")
+    def patch_annotation(annotation_id: int, body: AnnotationColorBody):
+        conn = open_db()
+        try:
+            try:
+                updated = update_annotation_color(conn, annotation_id, body.color)
+            except ValueError as exc:
+                raise HTTPException(status_code=422, detail=str(exc))
+            if not updated:
+                raise HTTPException(status_code=404, detail="标注不存在")
+            return {"ok": True}
+        finally:
+            conn.close()
+
+    @app.delete("/api/annotations/{annotation_id:int}")
+    def remove_annotation(annotation_id: int):
+        conn = open_db()
+        try:
+            if not delete_annotation(conn, annotation_id):
+                raise HTTPException(status_code=404, detail="标注不存在")
+            return {"ok": True}
         finally:
             conn.close()
 

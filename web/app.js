@@ -194,6 +194,42 @@ function openHlPopup(span) {
   hlPopup.style.top = `${window.scrollY + rect.bottom + 8}px`;
 }
 
+// --- Shelf: add or remove the current article from the shelf. ---
+
+// Sync the shelf button label with the local shelf state.
+function renderShelfButton() {
+  document.getElementById("shelf-toggle").textContent =
+    full && full.in_shelf ? "已在书架" : "加入书架";
+}
+
+// Toggle shelf membership. Only flip the local state once the server has
+// accepted the request, so a failed call leaves the button unchanged.
+async function toggleShelf() {
+  if (!articleId || !full) return;
+  const adding = !full.in_shelf;
+  try {
+    const resp = await fetch(`/api/shelf/${articleId}`, {
+      method: adding ? "POST" : "DELETE",
+    });
+    if (!resp.ok) return;
+    full.in_shelf = adding;
+    renderShelfButton();
+  } catch (err) {
+    console.error("Failed to toggle shelf:", err);
+  }
+}
+
+// Best-effort open tracking: failures are ignored so they never affect
+// reading.
+async function recordOpen() {
+  if (!articleId) return;
+  try {
+    await fetch(`/api/articles/${articleId}/open`, { method: "POST" });
+  } catch (err) {
+    // Open tracking must never break the page.
+  }
+}
+
 function showArticle(article) {
   full = article;
   articleId = full.id;
@@ -207,6 +243,7 @@ function showArticle(article) {
   bookmarks = full.bookmarks || [];
   renderBody();
   renderBookmarks();
+  renderShelfButton();
   fetch(`/api/articles/${full.id}/marks`)
     .then(r => r.json())
     .then(renderRightPanel)
@@ -226,6 +263,7 @@ async function loadArticle() {
       return;
     }
     showArticle(await resp.json());
+    recordOpen();
     return;
   }
   const today = await fetch("/api/articles/today").then(r => r.json());
@@ -236,6 +274,7 @@ async function loadArticle() {
   }
   const full = await fetch(`/api/articles/${today[0].id}`).then(r => r.json());
   showArticle(full);
+  recordOpen();
 }
 
 function sentenceAround(text, needle) {
@@ -514,6 +553,7 @@ document.getElementById("hl-remove").addEventListener("click", async () => {
 document.getElementById("popup-save").addEventListener("click", save);
 document.getElementById("popup-close").addEventListener("click", hidePopup);
 document.getElementById("add-bookmark").addEventListener("click", addBookmark);
+document.getElementById("shelf-toggle").addEventListener("click", toggleShelf);
 document.getElementById("mark-read").addEventListener("click", async e => {
   e.preventDefault();
   if (!articleId) return;

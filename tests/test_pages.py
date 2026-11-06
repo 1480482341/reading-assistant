@@ -173,3 +173,12 @@ def test_bookmark_mutations_gated_on_ok(tmp_path):
     render_idx = js.index("function renderBookmarks")
     assert js.index("if (!resp.ok) return;", render_idx) \
         < js.index("bookmarks = bookmarks.filter", render_idx)
+
+
+def test_shelf_and_open_hooks_in_reading_script(tmp_path):
+    db = str(tmp_path / "t.db")
+    init_db(db).close()
+    js = TestClient(create_app(db)).get("/static/app.js").text
+    assert "function toggleShelf" in js
+    assert "/open" in js
+    assert "/api/shelf/" in js

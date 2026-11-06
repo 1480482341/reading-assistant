@@ -166,6 +166,49 @@ body {
 }
 .actions button:not(.swatch):hover { border-color: var(--accent); color: var(--accent); }
 
+/* Bookmark rows in the left actions panel: a label button plus a narrow
+   delete button. The #bookmark-list prefix outranks the generic
+   .actions button:not(.swatch) rule above. */
+#bookmark-list { list-style: none; margin: 0; padding: 0; }
+#bookmark-list li {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border-bottom: 1px solid var(--line);
+}
+#bookmark-list .bm-jump {
+  flex: 1;
+  min-width: 0;
+  width: auto;
+  margin: 0;
+  padding: 6px 2px;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  color: var(--accent);
+  font-family: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+#bookmark-list .bm-del {
+  flex: 0 0 auto;
+  width: auto;
+  margin: 0;
+  padding: 4px 6px;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+#bookmark-list .bm-del:hover { color: var(--accent); }
+
 /* Color swatch chips: the color-mode toggle in the actions panel and the
    color picker inside the highlight popup. Kept after the .popup button
    rules so these overrides win the specificity tie. */

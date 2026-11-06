@@ -123,3 +123,44 @@ def test_color_mode_and_selection_mapping(tmp_path):
         assert needle in js
     html = TestClient(create_app(db)).get("/").text
     assert 'id="hl-popup"' in html
+
+
+def test_bookmark_functions_present(tmp_path):
+    db = str(tmp_path / "t.db")
+    init_db(db).close()
+    js = TestClient(create_app(db)).get("/static/app.js").text
+    for needle in ("function renderBookmarks", "function addBookmark",
+                   "function jumpToBookmark", "function currentBookmarkAnchor",
+                   "/bookmarks"):
+        assert needle in js
+
+
+def test_bookmark_list_styles(tmp_path):
+    db = str(tmp_path / "t.db")
+    init_db(db).close()
+    css = TestClient(create_app(db)).get("/static/style.css").text
+    for needle in ("#bookmark-list li", ".bm-jump", ".bm-del",
+                   "var(--line)", "var(--accent)", "var(--muted)",
+                   "text-overflow: ellipsis", "flex: 1"):
+        assert needle in css
+
+
+def test_bookmark_anchor_measures_dom(tmp_path):
+    db = str(tmp_path / "t.db")
+    init_db(db).close()
+    js = TestClient(create_app(db)).get("/static/app.js").text
+    for needle in ("getBoundingClientRect", "scrollIntoView", "scrollBy",
+                   "offsetHeight"):
+        assert needle in js
+
+
+def test_bookmark_mutations_gated_on_ok(tmp_path):
+    db = str(tmp_path / "t.db")
+    init_db(db).close()
+    js = TestClient(create_app(db)).get("/static/app.js").text
+    add_idx = js.index("function addBookmark")
+    assert js.index("if (!resp.ok) return;", add_idx) \
+        < js.index("bookmarks.push", add_idx)
+    render_idx = js.index("function renderBookmarks")
+    assert js.index("if (!resp.ok) return;", render_idx) \
+        < js.index("bookmarks = bookmarks.filter", render_idx)

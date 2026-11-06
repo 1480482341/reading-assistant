@@ -39,6 +39,7 @@ function showMessage(title, body) {
   full = null;
   annotations = [];
   bookmarks = [];
+  renderBookmarks();
   document.getElementById("article-title").textContent = title;
   document.getElementById("article-title-zh").hidden = true;
   document.getElementById("article-meta").textContent = "";
@@ -205,6 +206,7 @@ function showArticle(article) {
   annotations = full.annotations || [];
   bookmarks = full.bookmarks || [];
   renderBody();
+  renderBookmarks();
   fetch(`/api/articles/${full.id}/marks`)
     .then(r => r.json())
     .then(renderRightPanel)
@@ -315,6 +317,102 @@ function addToSidebar(item) {
   appendMark(list, item);
 }
 
+// --- Bookmarks: add, jump to, and delete reading positions. ---
+
+// Height of the sticky topbar; the reading anchor is measured relative to it.
+function topbarHeight() {
+  const bar = document.querySelector(".topbar");
+  return bar ? bar.getBoundingClientRect().height : 0;
+}
+
+// Current reading anchor: the first paragraph whose top edge sits at or
+// below the topbar, plus the fractional position of that edge within the
+// paragraph. Pure DOM measurement — nothing is read from or written to the
+// server here.
+function currentBookmarkAnchor() {
+  const top = topbarHeight();
+  for (const p of bodyEl.querySelectorAll("p[data-para]")) {
+    const rect = p.getBoundingClientRect();
+    if (rect.top >= top) {
+      const ratio = Math.min(1, Math.max(0, (top - rect.top) / rect.height));
+      return {
+        paraIndex: Number(p.dataset.para),
+        offsetRatio: ratio,
+        label: p.textContent.slice(0, 40),
+      };
+    }
+  }
+  return null;
+}
+
+// POST the current anchor as a new bookmark; only touch local state when
+// the server accepted it.
+async function addBookmark() {
+  if (!articleId) return;
+  const anchor = currentBookmarkAnchor();
+  if (!anchor) return;
+  try {
+    const resp = await fetch(`/api/articles/${articleId}/bookmarks`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        para_index: anchor.paraIndex,
+        offset_ratio: anchor.offsetRatio,
+        label: anchor.label,
+      }),
+    });
+    if (!resp.ok) return;
+    bookmarks.push(await resp.json());
+    renderBookmarks();
+  } catch (err) {
+    console.error("Failed to add bookmark:", err);
+  }
+}
+
+// Fill the bookmark list from the local bookmarks array. Labels go through
+// textContent, never innerHTML, so they cannot inject markup.
+function renderBookmarks() {
+  const list = document.getElementById("bookmark-list");
+  list.innerHTML = "";
+  for (const bm of bookmarks) {
+    const li = document.createElement("li");
+    const jump = document.createElement("button");
+    jump.type = "button";
+    jump.className = "bm-jump";
+    jump.textContent = bm.label || "书签";
+    jump.addEventListener("click", () => jumpToBookmark(bm));
+    const del = document.createElement("button");
+    del.type = "button";
+    del.className = "bm-del";
+    del.textContent = "×";
+    del.title = "删除书签";
+    del.addEventListener("click", async () => {
+      try {
+        const resp = await fetch(`/api/bookmarks/${bm.id}`, {
+          method: "DELETE",
+        });
+        if (!resp.ok) return;
+        bookmarks = bookmarks.filter(x => String(x.id) !== String(bm.id));
+        renderBookmarks();
+      } catch (err) {
+        console.error("Failed to delete bookmark:", err);
+      }
+    });
+    li.appendChild(jump);
+    li.appendChild(del);
+    list.appendChild(li);
+  }
+}
+
+// Scroll to a bookmark's paragraph, then adjust so the saved offset lands
+// right below the topbar.
+function jumpToBookmark(bm) {
+  const p = bodyEl.querySelector(`p[data-para="${bm.para_index}"]`);
+  if (!p) return;
+  p.scrollIntoView({ block: "start" });
+  window.scrollBy(0, -topbarHeight() + bm.offset_ratio * p.offsetHeight);
+}
+
 async function save() {
   if (!current || !articleId) return;
   await fetch("/api/occurrences", {
@@ -408,6 +506,7 @@ document.getElementById("hl-remove").addEventListener("click", async () => {
 
 document.getElementById("popup-save").addEventListener("click", save);
 document.getElementById("popup-close").addEventListener("click", hidePopup);
+document.getElementById("add-bookmark").addEventListener("click", addBookmark);
 document.getElementById("mark-read").addEventListener("click", async e => {
   e.preventDefault();
   if (!articleId) return;

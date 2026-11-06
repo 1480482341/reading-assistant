@@ -128,6 +128,24 @@ def test_run_claude_skips_mcp_servers(monkeypatch):
     assert "--strict-mcp-config" in captured["cmd"]
 
 
+def test_run_claude_skips_user_hooks_and_plugins(monkeypatch):
+    captured = {}
+
+    class Proc:
+        returncode = 0
+        stdout = '{"result": "[]"}'
+        stderr = ""
+
+    def fake_run(cmd, **kwargs):
+        captured["cmd"] = cmd
+        return Proc()
+
+    monkeypatch.setattr("app.analyze.shutil.which", lambda name: "claude")
+    monkeypatch.setattr("app.analyze.subprocess.run", fake_run)
+    run_claude("hello")
+    assert "--bare" in captured["cmd"]
+
+
 def test_snippet_lookup_uses_fast_model(monkeypatch, tmp_path):
     from app.analyze import analyze_snippet
 
@@ -271,3 +289,22 @@ def test_default_db_path_is_absolute():
     import app.main as main
     assert main.DB_PATH.is_absolute()
     assert main.DB_PATH.as_posix().endswith("data/library.db")
+
+
+def test_analyze_article_uses_six_parallel_chunks(monkeypatch, tmp_path):
+    import app.analyze as mod
+
+    captured = {}
+    real_pool = mod.ThreadPoolExecutor
+
+    def recording_pool(*args, **kwargs):
+        captured.update(kwargs)
+        return real_pool(*args, **kwargs)
+
+    monkeypatch.setattr(mod, "ThreadPoolExecutor", recording_pool)
+    conn = init_db(str(tmp_path / "t.db"))
+    conn.execute("INSERT INTO articles(url,title,text,status) VALUES('u','t',?,'pending')",
+                 (" ".join(f"w{i}" for i in range(1700)),))
+    conn.commit()
+    analyze_article(conn, 1, runner=lambda p: "[]")
+    assert captured["max_workers"] == 6

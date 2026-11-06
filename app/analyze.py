@@ -14,6 +14,7 @@ DEFAULT_CHUNK_WORDS = 800
 DEFAULT_TIMEOUT = 300
 WORDS_PER_ITEM = 5
 SNIPPET_MODEL = "haiku"
+PREANALYSIS_WORKERS = 6
 
 PROMPT_TEMPLATE = """You are a vocabulary and grammar analyst for a Chinese reader of English.
 
@@ -114,7 +115,8 @@ def run_claude(prompt: str, timeout: int = DEFAULT_TIMEOUT,
     if not binary:
         raise ModelCallError("找不到 claude 可执行文件")
     cmd = ["cmd", "/c", binary] if os.name == "nt" else [binary]
-    cmd += ["-p", "--output-format", "json", "--strict-mcp-config"]
+    # --bare skips user hooks/plugins/memory: ~1.5s faster per call, no effect on JSON output
+    cmd += ["-p", "--output-format", "json", "--strict-mcp-config", "--bare"]
     if model:
         cmd += ["--model", model]
     try:
@@ -212,7 +214,7 @@ def analyze_article(conn: sqlite3.Connection, article_id: int,
         chunks = chunk_text(row["text"])
         chunk_items: list[list[dict]] = []
         failures: list[str] = []
-        with ThreadPoolExecutor(max_workers=3) as pool:
+        with ThreadPoolExecutor(max_workers=PREANALYSIS_WORKERS) as pool:
             futures = [pool.submit(_analyse_chunk, runner, chunk) for chunk in chunks]
             for future in as_completed(futures):
                 try:

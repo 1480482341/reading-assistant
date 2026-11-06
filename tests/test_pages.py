@@ -210,3 +210,57 @@ def test_all_pages_share_navigation(tmp_path):
         html = _html(path, tmp_path)
         for href in ('href="/"', 'href="/library"', 'href="/shelf"', 'href="/review"'):
             assert href in html
+
+
+def test_drag_selection_suppresses_highlight_click_outside_color_mode(tmp_path):
+    db = str(tmp_path / "t.db")
+    init_db(db).close()
+    js = TestClient(create_app(db)).get("/static/app.js").text
+    # Both mouseup branches (color mode and lookup mode) must arm the
+    # suppress flag for a non-collapsed selection, so the trailing click on
+    # a .hl span cannot hijack the lookup popup.
+    assert js.count("suppressHlClick = true") >= 2
+    assert "isCollapsed" in js
+
+
+def test_annotation_offsets_count_code_points_not_utf16_units(tmp_path):
+    db = str(tmp_path / "t.db")
+    init_db(db).close()
+    js = TestClient(create_app(db)).get("/static/app.js").text
+    # Offsets are stored as Python code points; every place the script
+    # slices or measures paragraph text must use the code-point helpers.
+    assert "const cpLength" in js
+    assert "Array.from(s).slice" in js
+    assert "cpSlice(para" in js
+    assert "cpLength(p.textContent)" in js
+    # The DOM offset handed to offsetInPara is UTF-16; convert it at the
+    # text-node boundary before mixing it with code-point accumulation.
+    assert "textContent.slice(0, offset)" in js
+
+
+def test_add_bookmark_has_inflight_guard(tmp_path):
+    db = str(tmp_path / "t.db")
+    init_db(db).close()
+    js = TestClient(create_app(db)).get("/static/app.js").text
+    add_idx = js.index("function addBookmark")
+    # The guard must be set before the POST and always cleared in a finally,
+    # so a double click cannot create two bookmarks.
+    assert js.index("bookmarkPending", add_idx) < \
+        js.index("bookmarkPending = true", add_idx)
+    assert js.index("bookmarkPending = true", add_idx) < \
+        js.index("finally", add_idx)
+    assert js.index("finally", add_idx) < \
+        js.index("bookmarkPending = false", add_idx)
+
+
+def test_error_message_resets_color_mode_and_shelf_button(tmp_path):
+    db = str(tmp_path / "t.db")
+    init_db(db).close()
+    js = TestClient(create_app(db)).get("/static/app.js").text
+    msg_idx = js.index("function showMessage")
+    # showMessage is defined before the helpers it now calls; the resets
+    # must sit inside its body.
+    assert js.index("setColorMode(null)", msg_idx) < \
+        js.index("function setColorMode")
+    assert js.index("renderShelfButton()", msg_idx) < \
+        js.index("function renderShelfButton")

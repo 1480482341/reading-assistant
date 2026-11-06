@@ -18,6 +18,12 @@ function escapeHtml(s) {
   })[c]);
 }
 
+// The browser measures string lengths in UTF-16 code units while the server
+// stores annotation offsets as Python code-point indices. Every offset or
+// length computed against paragraph text must therefore count code points.
+const cpLength = s => Array.from(s).length;
+const cpSlice = (s, start, end) => Array.from(s).slice(start, end).join("");
+
 async function checkHealth() {
   try {
     const health = await fetch("/api/health").then(r => r.json());
@@ -39,7 +45,11 @@ function showMessage(title, body) {
   full = null;
   annotations = [];
   bookmarks = [];
+  // Reset the UI state that follows the current article, so an error page
+  // never carries over the previous article's color mode or shelf label.
+  setColorMode(null);
   renderBookmarks();
+  renderShelfButton();
   document.getElementById("article-title").textContent = title;
   document.getElementById("article-title-zh").hidden = true;
   document.getElementById("article-meta").textContent = "";
@@ -62,15 +72,16 @@ function renderBody() {
       .sort((x, y) => x.start_offset - y.start_offset);
     const frags = [];
     let cursor = 0;
+    const paraLen = cpLength(para);
     for (const a of anns) {
       const start = Math.max(a.start_offset, cursor);
-      const end = Math.min(a.end_offset, para.length);
+      const end = Math.min(a.end_offset, paraLen);
       if (end <= start) continue;
-      if (start > cursor) frags.push({ text: para.slice(cursor, start) });
-      frags.push({ text: para.slice(start, end), ann: a });
+      if (start > cursor) frags.push({ text: cpSlice(para, cursor, start) });
+      frags.push({ text: cpSlice(para, start, end), ann: a });
       cursor = end;
     }
-    if (cursor < para.length) frags.push({ text: para.slice(cursor) });
+    if (cursor < paraLen) frags.push({ text: cpSlice(para, cursor) });
     const inner = frags.map(f => f.ann
       ? `<span class="hl hl-${f.ann.color}" data-annotation-id="${f.ann.id}">${escapeHtml(f.text)}</span>`
       : escapeHtml(f.text)).join("");
@@ -93,12 +104,14 @@ function setColorMode(color) {
 // content, so offsets match the trimmed paragraph string the server checks.
 function offsetInPara(p, container, offset) {
   if (container.nodeType === Node.TEXT_NODE) {
+    // DOM offsets are UTF-16 code units; convert the boundary to code
+    // points so the result matches the server's Python slicing.
     let pos = 0;
     const walker = document.createTreeWalker(p, NodeFilter.SHOW_TEXT);
     let node;
     while ((node = walker.nextNode())) {
-      if (node === container) return pos + offset;
-      pos += node.textContent.length;
+      if (node === container) return pos + cpLength(container.textContent.slice(0, offset));
+      pos += cpLength(node.textContent);
     }
     return pos;
   }
@@ -110,12 +123,12 @@ function offsetInPara(p, container, offset) {
   let node;
   while ((node = walker.nextNode())) {
     if (container.contains(node)) { base = pos; break; }
-    pos += node.textContent.length;
+    pos += cpLength(node.textContent);
   }
-  if (base < 0) return p.textContent.length;
+  if (base < 0) return cpLength(p.textContent);
   let before = 0;
   for (let i = 0; i < offset && i < container.childNodes.length; i++) {
-    before += container.childNodes[i].textContent.length;
+    before += cpLength(container.childNodes[i].textContent);
   }
   return base + before;
 }
@@ -136,7 +149,7 @@ function selectionToRange(sel) {
     ? range.endContainer.parentElement : range.endContainer;
   const end = endEl && p.contains(endEl)
     ? offsetInPara(p, range.endContainer, range.endOffset)
-    : p.textContent.length;
+    : cpLength(p.textContent);
   if (start === end) return null;
   return { paraIndex: Number(p.dataset.para), start, end };
 }
@@ -156,7 +169,7 @@ async function applyAnnotation(range, color) {
         para_index: range.paraIndex,
         start_offset: range.start,
         end_offset: range.end,
-        quote: para.slice(range.start, range.end),
+        quote: cpSlice(para, range.start, range.end),
         color,
       }),
     });
@@ -392,11 +405,15 @@ function currentBookmarkAnchor() {
 }
 
 // POST the current anchor as a new bookmark; only touch local state when
-// the server accepted it.
+// the server accepted it. The POST is not idempotent, so an in-flight guard
+// swallows repeat clicks (e.g. a double click) until the request settles.
+let bookmarkPending = false;
+
 async function addBookmark() {
-  if (!articleId) return;
+  if (!articleId || bookmarkPending) return;
   const anchor = currentBookmarkAnchor();
   if (!anchor) return;
+  bookmarkPending = true;
   try {
     const resp = await fetch(`/api/articles/${articleId}/bookmarks`, {
       method: "POST",
@@ -412,6 +429,8 @@ async function addBookmark() {
     renderBookmarks();
   } catch (err) {
     console.error("Failed to add bookmark:", err);
+  } finally {
+    bookmarkPending = false;
   }
 }
 
@@ -487,6 +506,9 @@ document.addEventListener("mouseup", e => {
     applyAnnotation(range, colorMode);
     return;
   }
+  // A drag that ends on a highlight must not open the recolor popup: the
+  // trailing click lands on the .hl span and would hijack the lookup.
+  if (!window.getSelection().isCollapsed) suppressHlClick = true;
   hideHlPopup();
   onSelect();
 });

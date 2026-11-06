@@ -3,7 +3,7 @@ from pathlib import Path
 
 from app.sources import normalize_published_at
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS articles (
@@ -94,6 +94,40 @@ CREATE TABLE IF NOT EXISTS settings (
     key        TEXT PRIMARY KEY,
     value      TEXT,
     updated_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS annotations (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    article_id   INTEGER NOT NULL REFERENCES articles(id) ON DELETE CASCADE,
+    para_index   INTEGER NOT NULL,
+    start_offset INTEGER NOT NULL,
+    end_offset   INTEGER NOT NULL,
+    quote        TEXT NOT NULL,
+    color        TEXT NOT NULL,
+    created_at   TEXT DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_annotations_article ON annotations(article_id);
+
+CREATE TABLE IF NOT EXISTS bookmarks (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    article_id   INTEGER NOT NULL REFERENCES articles(id) ON DELETE CASCADE,
+    para_index   INTEGER NOT NULL,
+    offset_ratio REAL DEFAULT 0,
+    label        TEXT DEFAULT '',
+    created_at   TEXT DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_bookmarks_article ON bookmarks(article_id);
+
+CREATE TABLE IF NOT EXISTS shelf (
+    article_id INTEGER PRIMARY KEY REFERENCES articles(id) ON DELETE CASCADE,
+    added_at   TEXT DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS reading_history (
+    article_id   INTEGER PRIMARY KEY REFERENCES articles(id) ON DELETE CASCADE,
+    open_count   INTEGER DEFAULT 1,
+    first_opened TEXT,
+    last_opened  TEXT
 );
 """
 

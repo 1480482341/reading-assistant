@@ -1,7 +1,7 @@
 import logging
 import shutil
 from contextlib import asynccontextmanager
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
@@ -20,6 +20,8 @@ from app.library import library_rows
 from app.lookup import cached_item, find_analysis_item, normalize_term, store_item
 from app.metadata import INTEREST_TAGS
 from app.review import due_queue, ensure_review, grade
+from app.shelf import (add_to_shelf, history_rows, record_open,
+                       remove_from_shelf, shelf_rows)
 from app.sources import pick_today
 
 MAX_SELECTION = 500
@@ -304,6 +306,45 @@ def create_app(db_path: str, runner: Runner | None = None) -> FastAPI:
         finally:
             conn.close()
 
+    @app.get("/api/shelf")
+    def shelf_list():
+        conn = open_db()
+        try:
+            return shelf_rows(conn)
+        finally:
+            conn.close()
+
+    @app.post("/api/shelf/{article_id:int}")
+    def shelf_add(article_id: int):
+        conn = open_db()
+        try:
+            if conn.execute("SELECT 1 FROM articles WHERE id = ?",
+                            (article_id,)).fetchone() is None:
+                raise HTTPException(status_code=404, detail="文章不存在")
+            add_to_shelf(conn, article_id,
+                         datetime.now().isoformat(timespec="seconds"))
+            return {"ok": True}
+        finally:
+            conn.close()
+
+    @app.delete("/api/shelf/{article_id:int}")
+    def shelf_remove(article_id: int):
+        conn = open_db()
+        try:
+            if not remove_from_shelf(conn, article_id):
+                raise HTTPException(status_code=404, detail="文章不在书架")
+            return {"ok": True}
+        finally:
+            conn.close()
+
+    @app.get("/api/history")
+    def history_list():
+        conn = open_db()
+        try:
+            return history_rows(conn)
+        finally:
+            conn.close()
+
     @app.get("/api/articles/{article_id:int}")
     def article_detail(article_id: int):
         conn = open_db()
@@ -326,6 +367,19 @@ def create_app(db_path: str, runner: Runner | None = None) -> FastAPI:
             conn.commit()
             if cur.rowcount == 0:
                 raise HTTPException(status_code=404, detail="文章不存在")
+            return {"ok": True}
+        finally:
+            conn.close()
+
+    @app.post("/api/articles/{article_id}/open")
+    def article_open(article_id: int):
+        conn = open_db()
+        try:
+            if conn.execute("SELECT 1 FROM articles WHERE id = ?",
+                            (article_id,)).fetchone() is None:
+                raise HTTPException(status_code=404, detail="文章不存在")
+            record_open(conn, article_id,
+                        datetime.now().isoformat(timespec="seconds"))
             return {"ok": True}
         finally:
             conn.close()

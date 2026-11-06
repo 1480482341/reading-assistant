@@ -203,3 +203,10 @@ def test_shelf_page_serves_with_two_tabs(tmp_path):
     assert 'data-tab="history"' in r.text
     assert 'id="shelf-list"' in r.text
     assert 'id="history-list"' in r.text
+
+
+def test_all_pages_share_navigation(tmp_path):
+    for path in ("/", "/library", "/review", "/shelf"):
+        html = _html(path, tmp_path)
+        for href in ('href="/"', 'href="/library"', 'href="/shelf"', 'href="/review"'):
+            assert href in html

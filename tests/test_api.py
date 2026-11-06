@@ -222,3 +222,39 @@ def test_miss_endpoint_returns_analysis(tmp_path):
     r = c.post("/api/lookup/miss", json={"article_id": 1, "text": "scrutiny"})
     assert r.status_code == 200
     assert r.json()["item"]["gloss_zh"] == "审查"
+
+
+def test_article_detail_includes_marks_and_shelf(tmp_path):
+    db = str(tmp_path / "t.db")
+    conn = init_db(db)
+    conn.execute("INSERT INTO articles(id,url,title,text,status) "
+                 "VALUES(1,'u','t','First.\n\nSecond.','ready')")
+    conn.execute("INSERT INTO annotations(article_id,para_index,start_offset,"
+                 "end_offset,quote,color) VALUES(1,0,0,5,'First','red')")
+    conn.execute("INSERT INTO bookmarks(article_id,para_index,offset_ratio,label) "
+                 "VALUES(1,1,0.5,'Second')")
+    conn.execute("INSERT INTO shelf(article_id) VALUES(1)")
+    conn.commit()
+    conn.close()
+    body = TestClient(create_app(db)).get("/api/articles/1").json()
+    assert body["in_shelf"] is True
+    assert body["annotations"][0]["color"] == "red"
+    assert body["bookmarks"][0]["offset_ratio"] == 0.5
+
+
+def test_marks_endpoint_splits_words_and_grammar(tmp_path):
+    db = str(tmp_path / "t.db")
+    conn = init_db(db)
+    conn.execute("INSERT INTO articles(id,url,title,text,status) "
+                 "VALUES(1,'u','t','body','ready')")
+    conn.execute("INSERT INTO entries(id,kind,lemma) VALUES(1,'word','albeit')")
+    conn.execute("INSERT INTO entries(id,kind,lemma) VALUES(2,'grammar','inversion')")
+    conn.execute("INSERT INTO occurrences(entry_id,article_id,sentence,surface,gloss)"
+                 " VALUES(1,1,'s','albeit','尽管')")
+    conn.execute("INSERT INTO occurrences(entry_id,article_id,sentence,surface,gloss)"
+                 " VALUES(2,1,'s','never have I','倒装')")
+    conn.commit()
+    conn.close()
+    body = TestClient(create_app(db)).get("/api/articles/1/marks").json()
+    assert [o["term"] for o in body["occurrences"]] == ["albeit"]
+    assert [o["term"] for o in body["grammar"]] == ["inversion"]

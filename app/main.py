@@ -20,7 +20,7 @@ from app.library import library_rows
 from app.lookup import cached_item, find_analysis_item, normalize_term, store_item
 from app.metadata import INTEREST_TAGS
 from app.review import due_queue, ensure_review, grade
-from app.shelf import (add_to_shelf, history_rows, record_open,
+from app.shelf import (add_to_shelf, history_rows, in_shelf, record_open,
                        remove_from_shelf, shelf_rows)
 from app.sources import pick_today
 
@@ -355,7 +355,37 @@ def create_app(db_path: str, runner: Runner | None = None) -> FastAPI:
             ).fetchone()
             if row is None:
                 raise HTTPException(status_code=404, detail="文章不存在")
-            return dict(row)
+            return {**dict(row),
+                    "in_shelf": in_shelf(conn, article_id),
+                    "annotations": list_annotations(conn, article_id),
+                    "bookmarks": list_bookmarks(conn, article_id)}
+        finally:
+            conn.close()
+
+    @app.get("/api/articles/{article_id}/marks")
+    def article_marks(article_id: int):
+        conn = open_db()
+        try:
+            rows = conn.execute(
+                "SELECT e.kind, e.lemma, o.gloss, o.grammar_role, o.why "
+                "FROM occurrences o JOIN entries e ON e.id = o.entry_id "
+                "WHERE o.article_id = ?",
+                (article_id,),
+            ).fetchall()
+            occurrences = []
+            grammar = []
+            for row in rows:
+                item = {
+                    "term": row["lemma"],
+                    "gloss_zh": row["gloss"],
+                    "grammar_role": row["grammar_role"],
+                    "why": row["why"],
+                }
+                if row["kind"] == "grammar":
+                    grammar.append(item)
+                else:
+                    occurrences.append(item)
+            return {"occurrences": occurrences, "grammar": grammar}
         finally:
             conn.close()
 

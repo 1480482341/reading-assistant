@@ -80,3 +80,21 @@ def test_tags_endpoint_serves_controlled_vocabulary(tmp_path):
 def test_article_detail_includes_title_zh(tmp_path):
     body = _client(tmp_path).get("/api/articles/1").json()
     assert body["title_zh"] == "旧文"
+
+
+def test_library_rows_expose_mark_counts_and_shelf_flag(tmp_path):
+    db = str(tmp_path / "t.db")
+    conn = init_db(db)
+    conn.execute("INSERT INTO articles(id,url,title,text,status) "
+                 "VALUES(1,'u','T','First.\n\nSecond.','ready')")
+    conn.execute("INSERT INTO annotations(article_id,para_index,start_offset,"
+                 "end_offset,quote,color) VALUES(1,0,0,5,'First','red')")
+    conn.execute("INSERT INTO bookmarks(article_id,para_index,offset_ratio,label) "
+                 "VALUES(1,1,0,'Second')")
+    conn.execute("INSERT INTO shelf(article_id) VALUES(1)")
+    conn.commit()
+    conn.close()
+    row = TestClient(create_app(db)).get("/api/articles/library").json()[0]
+    assert row["annotation_count"] == 1
+    assert row["bookmark_count"] == 1
+    assert row["in_shelf"] is True

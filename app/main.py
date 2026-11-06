@@ -468,6 +468,10 @@ def create_app(db_path: str, runner: Runner | None = None) -> FastAPI:
         def library_page():
             return FileResponse(WEB_DIR / "library.html")
 
+        @app.get("/shelf")
+        def shelf_page():
+            return FileResponse(WEB_DIR / "shelf.html")
+
     return app
 
 

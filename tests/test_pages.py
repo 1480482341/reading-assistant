@@ -76,7 +76,7 @@ def test_style_defines_four_themes(tmp_path):
 
 
 def test_every_page_sets_theme_before_render_and_has_toggle(tmp_path):
-    for path in ("/", "/library", "/review"):
+    for path in ("/", "/library", "/review", "/shelf"):
         html = _html(path, tmp_path)
         assert "ra-theme" in html
         assert 'id="theme-toggle"' in html
@@ -192,3 +192,14 @@ def test_library_has_annotation_filter_and_shelf_button(tmp_path):
     js = TestClient(create_app(db)).get("/static/library.js").text
     for needle in ("annotation_count", "bookmark_count", "only-marked", "shelf"):
         assert needle in js
+
+
+def test_shelf_page_serves_with_two_tabs(tmp_path):
+    db = str(tmp_path / "t.db")
+    init_db(db).close()
+    r = TestClient(create_app(db)).get("/shelf")
+    assert r.status_code == 200
+    assert 'data-tab="shelf"' in r.text
+    assert 'data-tab="history"' in r.text
+    assert 'id="shelf-list"' in r.text
+    assert 'id="history-list"' in r.text

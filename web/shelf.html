@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8">
+  <title>书架 · Reading Assistant</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <link rel="stylesheet" href="/static/shelf.css">
+  <script>
+  (function () {
+    var t = localStorage.getItem("ra-theme");
+    if (["eye-green","dark","light","eye-warm"].indexOf(t) < 0) t = "eye-green";
+    document.documentElement.dataset.theme = t;
+  })();
+  </script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">Reading&nbsp;Assistant</div>
+    <nav>
+      <a href="/">阅读</a>
+      <a href="/library">文章库</a>
+      <a href="/review">复习</a>
+      <a href="/api/export?format=md">导出</a>
+      <button id="theme-toggle" class="theme-toggle">护眼绿</button>
+    </nav>
+  </header>
+
+  <main class="shelf-wrap">
+    <h1>书架</h1>
+    <div class="tabs">
+      <button data-tab="shelf" class="active">书架</button>
+      <button data-tab="history">阅读历史</button>
+    </div>
+    <ul class="item-list" id="shelf-list"></ul>
+    <p class="empty" id="shelf-empty" hidden>书架还是空的，去阅读页把文章加入书架吧。</p>
+    <ul class="item-list" id="history-list" hidden></ul>
+    <p class="empty" id="history-empty" hidden>还没有阅读记录。</p>
+  </main>
+
+  <script src="/static/theme.js"></script>
+  <script src="/static/shelf.js"></script>
+</body>
+</html>

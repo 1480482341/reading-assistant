@@ -1,0 +1,90 @@
+.shelf-wrap {
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 40px 32px 96px;
+}
+
+.shelf-wrap h1 {
+  font-size: 28px;
+  margin: 0 0 20px;
+}
+
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 24px;
+}
+
+.tabs button {
+  padding: 5px 14px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel);
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.tabs button.active {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.item-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.item-card {
+  padding: 16px 0;
+  border-bottom: 1px solid var(--line);
+  cursor: pointer;
+}
+
+.item-card:hover .item-title { color: var(--accent); }
+
+.item-title {
+  font-size: 19px;
+  line-height: 1.35;
+}
+
+.item-card .meta {
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 12px;
+  font-family: -apple-system, "Segoe UI", sans-serif;
+}
+
+.item-card .marks,
+.item-card .history-line {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 12px;
+  font-family: -apple-system, "Segoe UI", sans-serif;
+}
+
+.item-card .card-btn {
+  margin-top: 10px;
+  padding: 4px 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel);
+  color: var(--muted);
+  font-family: -apple-system, "Segoe UI", sans-serif;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.item-card .card-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.empty {
+  color: var(--muted);
+  font-size: 14px;
+}

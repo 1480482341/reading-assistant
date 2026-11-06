@@ -116,6 +116,106 @@ def test_occurrences_rejects_missing_article_id(tmp_path):
     assert c.post("/api/occurrences", json={"text": "scrutiny"}).status_code == 422
 
 
+def test_lookup_matches_word_inside_short_phrase(tmp_path):
+    db = str(tmp_path / "t.db")
+    conn = init_db(db)
+    conn.execute("INSERT INTO articles(url,title,text,status) VALUES('u','t','body','ready')")
+    conn.execute(
+        "INSERT INTO analysis(article_id,status,payload_json) VALUES(1,'ready',?)",
+        ('[{"term":"come naturally to","type":"phrase","gloss_zh":"自然而然地"},'
+         '{"term":"naturally occurring","type":"phrase","gloss_zh":"天然存在的"}]',),
+    )
+    conn.commit()
+    conn.close()
+    r = TestClient(create_app(db)).get(
+        "/api/lookup", params={"article_id": 1, "text": "naturally"})
+    body = r.json()
+    assert body["hit"] is True
+    assert body["item"]["term"] == "naturally occurring"
+
+
+def test_lookup_matches_word_inside_longer_phrase(tmp_path):
+    db = str(tmp_path / "t.db")
+    conn = init_db(db)
+    conn.execute("INSERT INTO articles(url,title,text,status) VALUES('u','t','body','ready')")
+    conn.execute(
+        "INSERT INTO analysis(article_id,status,payload_json) VALUES(1,'ready',?)",
+        ('[{"term":"a more consequential and thornier question","type":"phrase",'
+         '"gloss_zh":"更重大也更棘手的问题"}]',),
+    )
+    conn.commit()
+    conn.close()
+    r = TestClient(create_app(db)).get(
+        "/api/lookup", params={"article_id": 1, "text": "consequential"})
+    body = r.json()
+    assert body["hit"] is True
+    assert body["item"]["gloss_zh"] == "更重大也更棘手的问题"
+
+
+def test_lookup_matches_plural_selection_by_stemming(tmp_path):
+    db = str(tmp_path / "t.db")
+    conn = init_db(db)
+    conn.execute("INSERT INTO articles(url,title,text,status) VALUES('u','t','body','ready')")
+    conn.execute(
+        "INSERT INTO analysis(article_id,status,payload_json) VALUES(1,'ready',?)",
+        ('[{"term":"process","type":"word","gloss_zh":"过程"}]',),
+    )
+    conn.commit()
+    conn.close()
+    r = TestClient(create_app(db)).get(
+        "/api/lookup", params={"article_id": 1, "text": "processes"})
+    body = r.json()
+    assert body["hit"] is True
+    assert body["item"]["term"] == "process"
+
+
+def test_lookup_does_not_phrase_match_common_short_selection(tmp_path):
+    db = str(tmp_path / "t.db")
+    conn = init_db(db)
+    conn.execute("INSERT INTO articles(url,title,text,status) VALUES('u','t','body','ready')")
+    conn.execute(
+        "INSERT INTO analysis(article_id,status,payload_json) VALUES(1,'ready',?)",
+        ('[{"term":"the state of the art","type":"phrase","gloss_zh":"最先进水平"}]',),
+    )
+    conn.commit()
+    conn.close()
+    r = TestClient(create_app(db)).get(
+        "/api/lookup", params={"article_id": 1, "text": "the"})
+    assert r.json()["hit"] is False
+
+
+def test_lookup_phrase_tie_does_not_crash(tmp_path):
+    db = str(tmp_path / "t.db")
+    conn = init_db(db)
+    conn.execute("INSERT INTO articles(url,title,text,status) VALUES('u','t','body','ready')")
+    conn.execute(
+        "INSERT INTO analysis(article_id,status,payload_json) VALUES(1,'ready',?)",
+        ('[{"term":"rooted in the","type":"phrase","gloss_zh":"根植于"},'
+         '{"term":"the rooted in","type":"phrase","gloss_zh":"根植其中"}]',),
+    )
+    conn.commit()
+    conn.close()
+    r = TestClient(create_app(db)).get(
+        "/api/lookup", params={"article_id": 1, "text": "rooted"})
+    assert r.status_code == 200
+    assert r.json()["hit"] is True
+
+
+def test_lookup_still_rejects_multiword_selection(tmp_path):
+    db = str(tmp_path / "t.db")
+    conn = init_db(db)
+    conn.execute("INSERT INTO articles(url,title,text,status) VALUES('u','t','body','ready')")
+    conn.execute(
+        "INSERT INTO analysis(article_id,status,payload_json) VALUES(1,'ready',?)",
+        ('[{"term":"come naturally to","type":"phrase","gloss_zh":"自然而然地"}]',),
+    )
+    conn.commit()
+    conn.close()
+    r = TestClient(create_app(db)).get(
+        "/api/lookup", params={"article_id": 1, "text": "come naturally"})
+    assert r.json()["hit"] is False
+
+
 def test_miss_endpoint_returns_analysis(tmp_path):
     runner = lambda prompt: '[{"term":"scrutiny","type":"word","gloss_zh":"审查"}]'
     c = _client(tmp_path, runner=runner)

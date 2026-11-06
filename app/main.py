@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 from app.analyze import AnalysisError, Runner, analyze_snippet
 from app.annotations import (add_annotation, delete_annotation,
                              list_annotations, update_annotation_color)
+from app.bookmarks import add_bookmark, delete_bookmark, list_bookmarks
 from app.collect import ingest_pdf, ingest_text, ingest_url, start_startup_job
 from app.db import connect, init_db, insert_occurrence, upsert_entry
 from app.export import entry_rows, export_csv, export_markdown
@@ -61,6 +62,12 @@ class AnnotationBody(BaseModel):
 
 class AnnotationColorBody(BaseModel):
     color: str
+
+
+class BookmarkBody(BaseModel):
+    para_index: int
+    offset_ratio: float = 0
+    label: str = ""
 
 
 def configure_logging(level: int = logging.INFO) -> None:
@@ -252,6 +259,47 @@ def create_app(db_path: str, runner: Runner | None = None) -> FastAPI:
         try:
             if not delete_annotation(conn, annotation_id):
                 raise HTTPException(status_code=404, detail="标注不存在")
+            return {"ok": True}
+        finally:
+            conn.close()
+
+    @app.get("/api/articles/{article_id:int}/bookmarks")
+    def article_bookmarks(article_id: int):
+        conn = open_db()
+        try:
+            if conn.execute("SELECT 1 FROM articles WHERE id = ?",
+                            (article_id,)).fetchone() is None:
+                raise HTTPException(status_code=404, detail="文章不存在")
+            return list_bookmarks(conn, article_id)
+        finally:
+            conn.close()
+
+    @app.post("/api/articles/{article_id:int}/bookmarks")
+    def create_bookmark(article_id: int, body: BookmarkBody):
+        conn = open_db()
+        try:
+            if conn.execute("SELECT 1 FROM articles WHERE id = ?",
+                            (article_id,)).fetchone() is None:
+                raise HTTPException(status_code=404, detail="文章不存在")
+            try:
+                new_id = add_bookmark(conn, article_id, body.para_index,
+                                      body.offset_ratio, body.label)
+            except ValueError as exc:
+                raise HTTPException(status_code=422, detail=str(exc))
+            row = conn.execute(
+                "SELECT id, para_index, offset_ratio, label, created_at "
+                "FROM bookmarks WHERE id = ?", (new_id,),
+            ).fetchone()
+            return dict(row)
+        finally:
+            conn.close()
+
+    @app.delete("/api/bookmarks/{bookmark_id:int}")
+    def remove_bookmark(bookmark_id: int):
+        conn = open_db()
+        try:
+            if not delete_bookmark(conn, bookmark_id):
+                raise HTTPException(status_code=404, detail="书签不存在")
             return {"ok": True}
         finally:
             conn.close()

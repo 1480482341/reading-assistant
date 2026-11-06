@@ -1,5 +1,6 @@
 let articleId = null;
 let current = null;
+let popupToken = 0;
 
 const popup = document.getElementById("popup");
 const bodyEl = document.getElementById("article-body");
@@ -17,6 +18,13 @@ async function checkHealth() {
   } catch (err) {
     document.getElementById("banner").hidden = false;
   }
+}
+
+function hidePopup() {
+  popupToken += 1;
+  popup.hidden = true;
+  const sel = window.getSelection();
+  if (sel) sel.removeAllRanges();
 }
 
 function showMessage(title, body) {
@@ -91,17 +99,19 @@ async function onSelect() {
   const text = String(sel).trim().slice(0, 500);
   if (!text || !articleId) return;
   const rect = sel.getRangeAt(0).getBoundingClientRect();
+  const token = ++popupToken;
 
   const res = await fetch(
     `/api/lookup?article_id=${articleId}&text=${encodeURIComponent(text)}`
   ).then(r => r.json());
+  if (token !== popupToken) return;
 
   if (res.hit) {
     showPopup(rect, res.item, text);
     return;
   }
 
-  showPopup(rect, { term: text, gloss_zh: "分析中…" }, text);
+  showPopup(rect, { term: text, gloss_zh: "分析中…（约 5–10 秒）" }, text);
   try {
     const resp = await fetch("/api/lookup/miss", {
       method: "POST",
@@ -110,8 +120,10 @@ async function onSelect() {
     });
     if (!resp.ok) throw new Error("model unavailable");
     const miss = await resp.json();
+    if (token !== popupToken) return;
     showPopup(rect, miss.item, text);
   } catch (err) {
+    if (token !== popupToken) return;
     showPopup(rect, { term: text, gloss_zh: "模型不可用，可先记下来" }, text);
   }
 }
@@ -139,16 +151,16 @@ async function save() {
     }),
   });
   addToSidebar(current.item);
-  popup.hidden = true;
+  hidePopup();
 }
 
 document.addEventListener("mouseup", e => {
   if (popup.contains(e.target)) return;
-  if (!bodyEl.contains(e.target)) { popup.hidden = true; return; }
+  if (!bodyEl.contains(e.target)) { hidePopup(); return; }
   onSelect();
 });
 document.getElementById("popup-save").addEventListener("click", save);
-document.getElementById("popup-close").addEventListener("click", () => { popup.hidden = true; });
+document.getElementById("popup-close").addEventListener("click", hidePopup);
 document.getElementById("mark-read").addEventListener("click", async e => {
   e.preventDefault();
   if (!articleId) return;

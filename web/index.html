@@ -19,7 +19,6 @@
       <a href="/" class="active">阅读</a>
       <a href="/library">文章库</a>
       <a href="/review">复习</a>
-      <a href="#" id="mark-read">读完了</a>
       <a href="/api/export?format=md">导出</a>
       <button id="theme-toggle" class="theme-toggle">护眼绿</button>
     </nav>
@@ -30,6 +29,22 @@
   </div>
 
   <main class="layout">
+    <aside class="actions">
+      <div class="actions-ops">
+        <div class="side-head">书签</div>
+        <button id="add-bookmark">＋ 书签</button>
+        <ul id="bookmark-list"></ul>
+        <div class="side-head">标色</div>
+        <div class="swatches">
+          <button class="swatch" data-color="red" title="标红"></button>
+          <button class="swatch" data-color="green" title="标绿"></button>
+          <button class="swatch" data-color="yellow" title="标黄"></button>
+        </div>
+        <div class="side-head">操作</div>
+        <button id="shelf-toggle">加入书架</button>
+        <button id="mark-read">读完了</button>
+      </div>
+    </aside>
     <section class="reader">
       <h1 id="article-title">载入中…</h1>
       <div class="title-zh" id="article-title-zh" hidden></div>

@@ -87,3 +87,19 @@ def test_inline_theme_script_falls_back_to_eye_green(tmp_path):
     html = _html("/", tmp_path)
     assert 'localStorage.getItem("ra-theme")' in html
     assert 't = "eye-green"' in html
+
+
+def test_reading_page_has_three_columns(tmp_path):
+    html = _html("/", tmp_path)
+    for needle in ('class="actions"', 'class="reader"', 'class="sidebar"',
+                   'id="add-bookmark"', 'id="bookmark-list"',
+                   'data-color="red"', 'data-color="green"', 'data-color="yellow"',
+                   'id="shelf-toggle"', 'id="mark-read"'):
+        assert needle in html
+
+
+def test_sidebar_scrolls_independently(tmp_path):
+    db = str(tmp_path / "t.db")
+    init_db(db).close()
+    css = TestClient(create_app(db)).get("/static/style.css").text
+    assert "overflow-y: auto" in css

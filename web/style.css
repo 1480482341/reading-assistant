@@ -52,8 +52,9 @@ body {
 
 .layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 280px;
-  gap: 40px;
+  grid-template-columns: 176px minmax(0, 1fr) 280px;
+  gap: 32px;
+  align-items: start;
   max-width: 1180px;
   margin: 0 auto;
   padding: 40px 32px 96px;
@@ -76,10 +77,17 @@ body {
 }
 #article-body p { margin: 0 0 1.1em; }
 
-.sidebar {
+.actions, .sidebar {
   position: sticky;
   top: 24px;
-  align-self: start;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+}
+.actions {
+  border-right: 1px solid var(--line);
+  padding-right: 16px;
+}
+.sidebar {
   border-left: 1px solid var(--line);
   padding-left: 20px;
   font-family: -apple-system, "Segoe UI", sans-serif;
@@ -137,4 +145,9 @@ body {
   border-bottom: 1px solid var(--line);
   color: var(--banner-ink);
   font-size: 13px;
+}
+
+@media (max-width: 900px) {
+  .layout { grid-template-columns: 1fr; }
+  .actions, .sidebar { position: static; max-height: none; }
 }

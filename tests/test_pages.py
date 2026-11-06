@@ -154,6 +154,15 @@ def test_bookmark_anchor_measures_dom(tmp_path):
         assert needle in js
 
 
+def test_bookmark_anchor_spans_top_of_viewport(tmp_path):
+    db = str(tmp_path / "t.db")
+    init_db(db).close()
+    js = TestClient(create_app(db)).get("/static/app.js").text
+    for needle in ("rect.bottom > top", "paras[paras.length - 1]",
+                   "if (!paras.length) return null"):
+        assert needle in js
+
+
 def test_bookmark_mutations_gated_on_ok(tmp_path):
     db = str(tmp_path / "t.db")
     init_db(db).close()

@@ -325,24 +325,31 @@ function topbarHeight() {
   return bar ? bar.getBoundingClientRect().height : 0;
 }
 
-// Current reading anchor: the first paragraph whose top edge sits at or
-// below the topbar, plus the fractional position of that edge within the
-// paragraph. Pure DOM measurement — nothing is read from or written to the
-// server here.
+// Current reading anchor: the paragraph spanning the top of the viewport —
+// the first one whose bottom edge sits below the topbar — plus the
+// fractional position of the topbar line within it. Falls back to the last
+// paragraph at its end when scrolled past the article; null only when the
+// body has no paragraphs. Pure DOM measurement — nothing is read from or
+// written to the server here.
 function currentBookmarkAnchor() {
+  const paras = bodyEl.querySelectorAll("p[data-para]");
+  if (!paras.length) return null;
   const top = topbarHeight();
-  for (const p of bodyEl.querySelectorAll("p[data-para]")) {
+  let anchor = paras[paras.length - 1];
+  let ratio = 1;
+  for (const p of paras) {
     const rect = p.getBoundingClientRect();
-    if (rect.top >= top) {
-      const ratio = Math.min(1, Math.max(0, (top - rect.top) / rect.height));
-      return {
-        paraIndex: Number(p.dataset.para),
-        offsetRatio: ratio,
-        label: p.textContent.slice(0, 40),
-      };
+    if (rect.bottom > top) {
+      anchor = p;
+      ratio = Math.min(1, Math.max(0, (top - rect.top) / rect.height));
+      break;
     }
   }
-  return null;
+  return {
+    paraIndex: Number(anchor.dataset.para),
+    offsetRatio: ratio,
+    label: anchor.textContent.slice(0, 40),
+  };
 }
 
 // POST the current anchor as a new bookmark; only touch local state when

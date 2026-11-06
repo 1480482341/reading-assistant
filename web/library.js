@@ -1,6 +1,6 @@
 const STATUS_LABELS = { pending: "待分析", ready: "可读", read: "已读" };
 
-const state = { tags: new Set(), status: "all" };
+const state = { tags: new Set(), status: "all", onlyMarked: false };
 let articles = [];
 let allTags = [];
 let loadError = false;
@@ -8,6 +8,7 @@ let loadError = false;
 const listEl = document.getElementById("article-list");
 const tagFilterEl = document.getElementById("tag-filter");
 const statusFilterEl = document.getElementById("status-filter");
+const onlyMarkedEl = document.getElementById("only-marked");
 const emptyEl = document.getElementById("empty-state");
 
 function escapeHtml(s) {
@@ -45,6 +46,9 @@ function matches(article) {
   for (const tag of state.tags) {
     if (!article.tags.includes(tag)) return false;
   }
+  // "Only marked" filter is client-side over loaded rows and composes
+  // with the status and tag filters above.
+  if (state.onlyMarked && article.annotation_count + article.bookmark_count <= 0) return false;
   return true;
 }
 
@@ -81,11 +85,19 @@ function render() {
     const tags = article.tags
       .map(tag => `<span class="tag">${escapeHtml(tag)}</span>`)
       .join("");
+    const shelfText = article.in_shelf ? "已在书架" : "加入书架";
     li.innerHTML = `
       <div class="title-en">${escapeHtml(article.title)}</div>
       ${titleZh}
       <div class="meta">${metaLine(article)}</div>
-      <div class="tags">${tags}</div>`;
+      <div class="marks">书签 ${escapeHtml(article.bookmark_count)} · 标色 ${escapeHtml(article.annotation_count)} · 词条 ${escapeHtml(article.occurrence_count)}</div>
+      <div class="tags">${tags}</div>
+      <button class="shelf-btn">${shelfText}</button>`;
+    const shelfBtn = li.querySelector(".shelf-btn");
+    shelfBtn.addEventListener("click", async event => {
+      event.stopPropagation();
+      await toggleShelf(article, shelfBtn);
+    });
     li.addEventListener("click", () => { window.location.href = `/?id=${article.id}`; });
     listEl.appendChild(li);
   }
@@ -98,6 +110,25 @@ statusFilterEl.addEventListener("click", e => {
   if (state.status === "all") state.tags.clear();
   render();
 });
+
+onlyMarkedEl.addEventListener("change", () => {
+  state.onlyMarked = onlyMarkedEl.checked;
+  render();
+});
+
+async function toggleShelf(article, btn) {
+  const adding = !article.in_shelf;
+  try {
+    const resp = await fetch(`/api/shelf/${article.id}`, {
+      method: adding ? "POST" : "DELETE",
+    });
+    if (!resp.ok) return;
+    article.in_shelf = adding;
+    btn.textContent = adding ? "已在书架" : "加入书架";
+  } catch (err) {
+    console.error("Failed to toggle shelf:", err);
+  }
+}
 
 function getJson(url) {
   return fetch(url).then(resp => {

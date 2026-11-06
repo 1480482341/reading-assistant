@@ -182,3 +182,13 @@ def test_shelf_and_open_hooks_in_reading_script(tmp_path):
     assert "function toggleShelf" in js
     assert "/open" in js
     assert "/api/shelf/" in js
+
+
+def test_library_has_annotation_filter_and_shelf_button(tmp_path):
+    html = _html("/library", tmp_path)
+    assert 'id="only-marked"' in html
+    db = str(tmp_path / "t.db")
+    init_db(db).close()
+    js = TestClient(create_app(db)).get("/static/library.js").text
+    for needle in ("annotation_count", "bookmark_count", "only-marked", "shelf"):
+        assert needle in js

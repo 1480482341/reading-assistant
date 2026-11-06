@@ -16,6 +16,13 @@ def test_chunk_text_splits_on_word_count():
     assert all(len(c.split()) <= 2000 for c in chunks)
 
 
+def test_preanalysis_asks_for_one_item_per_five_words():
+    prompt = build_preanalysis_prompt(" ".join(["word"] * 160))
+    assert "about 32 items" in prompt
+    assert "one per 5 words" in prompt
+    assert "context changes their meaning" in prompt
+
+
 def test_parse_strips_markdown_fences():
     raw = '```json\n[{"term":"run","type":"word","gloss_zh":"跑"}]\n```'
     assert parse_items(raw)[0]["term"] == "run"
@@ -68,7 +75,7 @@ def test_default_chunk_size_is_800_words():
 
 def test_prompt_targets_items_in_proportion_to_word_count():
     prompt = build_preanalysis_prompt("word " * 400)
-    assert "27" in prompt
+    assert "80" in prompt
     assert "150-200" not in prompt
 
 
@@ -101,6 +108,71 @@ def test_run_claude_defaults_to_long_timeout_in_empty_temp_cwd(monkeypatch):
     assert captured["timeout"] == 300
     assert os.path.isdir(captured["cwd"])
     assert os.listdir(captured["cwd"]) == []
+
+
+def test_run_claude_skips_mcp_servers(monkeypatch):
+    captured = {}
+
+    class Proc:
+        returncode = 0
+        stdout = '{"result": "[]"}'
+        stderr = ""
+
+    def fake_run(cmd, **kwargs):
+        captured["cmd"] = cmd
+        return Proc()
+
+    monkeypatch.setattr("app.analyze.shutil.which", lambda name: "claude")
+    monkeypatch.setattr("app.analyze.subprocess.run", fake_run)
+    run_claude("hello")
+    assert "--strict-mcp-config" in captured["cmd"]
+
+
+def test_snippet_lookup_uses_fast_model(monkeypatch, tmp_path):
+    from app.analyze import analyze_snippet
+
+    captured = {}
+
+    class Proc:
+        returncode = 0
+        stdout = '{"result": "[{\\"term\\": \\"x\\", \\"gloss_zh\\": \\"y\\"}]"}'
+        stderr = ""
+
+    def fake_run(cmd, **kwargs):
+        captured["cmd"] = cmd
+        return Proc()
+
+    monkeypatch.setattr("app.analyze.shutil.which", lambda name: "claude")
+    monkeypatch.setattr("app.analyze.subprocess.run", fake_run)
+
+    conn = init_db(str(tmp_path / "t.db"))
+    conn.execute("INSERT INTO articles(url,title,text,status) VALUES('u','t','body text','ready')")
+    conn.commit()
+    analyze_snippet(conn, 1, "body")
+    assert "--model" in captured["cmd"]
+    assert "haiku" in captured["cmd"]
+
+
+def test_preanalysis_keeps_default_model(monkeypatch, tmp_path):
+    captured = {}
+
+    class Proc:
+        returncode = 0
+        stdout = '{"result": "[{\\"term\\": \\"x\\"}]"}'
+        stderr = ""
+
+    def fake_run(cmd, **kwargs):
+        captured["cmd"] = cmd
+        return Proc()
+
+    monkeypatch.setattr("app.analyze.shutil.which", lambda name: "claude")
+    monkeypatch.setattr("app.analyze.subprocess.run", fake_run)
+
+    conn = init_db(str(tmp_path / "t.db"))
+    conn.execute("INSERT INTO articles(url,title,text,status) VALUES('u','t','body text','pending')")
+    conn.commit()
+    analyze_article(conn, 1)
+    assert "--model" not in captured["cmd"]
 
 
 def test_successful_analysis_marks_article_ready(tmp_path):

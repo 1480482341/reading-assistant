@@ -273,11 +273,35 @@ def test_occurrences_store_normalized_grammar_category(tmp_path):
     assert conn.execute("SELECT category FROM entries").fetchone()["category"] == "过去分词"
 
 
-def test_unknown_grammar_category_folds_to_other(tmp_path):
+def test_unknown_grammar_category_is_left_empty(tmp_path):
     client = _client(tmp_path)
     item = {"term": "Having started", "type": "grammar", "gloss_zh": "开始之后",
             "grammar_role": "状语", "why": "非谓语",
             "grammar_category": "分词状语从句"}
+    client.post("/api/occurrences", json={
+        "article_id": 1, "text": "Having started",
+        "sentence": "Having started early, she left.", "item": item})
+    conn = connect(str(tmp_path / "t.db"))
+    assert conn.execute("SELECT category FROM entries").fetchone()["category"] == ""
+
+
+def test_unknown_category_does_not_overwrite_existing(tmp_path):
+    client = _client(tmp_path)
+    base = {"term": "Having started", "type": "grammar", "gloss_zh": "开始之后",
+            "grammar_role": "状语", "why": "非谓语"}
+    for category in ("过去分词", "分词状语从句"):
+        client.post("/api/occurrences", json={
+            "article_id": 1, "text": "Having started",
+            "sentence": "Having started early, she left.",
+            "item": {**base, "grammar_category": category}})
+    conn = connect(str(tmp_path / "t.db"))
+    assert conn.execute("SELECT category FROM entries").fetchone()["category"] == "过去分词"
+
+
+def test_literal_other_category_is_stored(tmp_path):
+    client = _client(tmp_path)
+    item = {"term": "Having started", "type": "grammar", "gloss_zh": "开始之后",
+            "grammar_role": "状语", "why": "非谓语", "grammar_category": "其他"}
     client.post("/api/occurrences", json={
         "article_id": 1, "text": "Having started",
         "sentence": "Having started early, she left.", "item": item})

@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -13,6 +14,12 @@ FAKE = (
 )
 
 
+def _fake(prompt):
+    items = json.loads(FAKE)
+    items += [{"term": f"w{i}", "type": "word"} for i in range(59)]
+    return json.dumps(items, ensure_ascii=False)
+
+
 def test_ingest_analyze_lookup_confirm(tmp_path):
     db = str(tmp_path / "t.db")
     conn = init_db(db)
@@ -20,7 +27,7 @@ def test_ingest_analyze_lookup_confirm(tmp_path):
         encoding="utf-8")
     aid = ingest_article(conn, "u9", "T", "Quanta", "tech", html, "2026-11-05")
     assert aid is not None
-    analyze_article(conn, aid, runner=lambda p: FAKE)
+    analyze_article(conn, aid, runner=_fake)
     conn.close()
 
     c = TestClient(create_app(db))

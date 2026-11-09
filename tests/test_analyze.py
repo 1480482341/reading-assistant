@@ -1,9 +1,11 @@
+import json
 import os
 
 import pytest
 
 from app.analyze import (
     AnalysisError,
+    ModelCallError,
     analyze_article,
     build_preanalysis_prompt,
     chunk_text,
@@ -12,6 +14,17 @@ from app.analyze import (
     run_claude,
 )
 from app.db import init_db
+
+
+def _items(count, first=None):
+    rows = [{"term": first or f"w{i}", "type": "word"} for i in range(count)]
+    return json.dumps(rows, ensure_ascii=False)
+
+
+def _article(conn, text):
+    conn.execute("INSERT INTO articles(url,title,text,status) VALUES('u','t',?,'pending')", (text,))
+    conn.commit()
+    return conn.execute("SELECT id FROM articles").fetchone()["id"]
 
 
 def test_chunk_text_splits_on_word_count():
@@ -109,7 +122,7 @@ def test_analyze_article_uses_default_chunking(tmp_path):
     conn.commit()
     aid = conn.execute("SELECT id FROM articles").fetchone()["id"]
     prompts = []
-    analyze_article(conn, aid, runner=lambda p: prompts.append(p) or "[]")
+    analyze_article(conn, aid, runner=lambda p: prompts.append(p) or _items(60))
     assert len(prompts) == 4
 
 
@@ -240,7 +253,7 @@ def test_partial_chunk_failure_keeps_successful_items(tmp_path):
     def runner(prompt):
         if "boom" in prompt:
             raise AnalysisError("boom chunk failed")
-        return '[{"term":"good","type":"word"}]'
+        return _items(60, first="good")
 
     analyze_article(conn, aid, runner=runner)
     row = conn.execute("SELECT status, payload_json FROM analysis WHERE article_id=?", (aid,)).fetchone()
@@ -352,5 +365,118 @@ def test_analyze_article_uses_six_parallel_chunks(monkeypatch, tmp_path):
     conn.execute("INSERT INTO articles(url,title,text,status) VALUES('u','t',?,'pending')",
                  (" ".join(f"w{i}" for i in range(1700)),))
     conn.commit()
-    analyze_article(conn, 1, runner=lambda p: "[]")
+    analyze_article(conn, 1, runner=lambda p: _items(60))
     assert captured["max_workers"] == 6
+
+
+def test_low_output_chunk_is_retried_once(tmp_path):
+    conn = init_db(str(tmp_path / "t.db"))
+    aid = _article(conn, " ".join(["word"] * 500))
+    calls = []
+
+    def runner(prompt):
+        calls.append(prompt)
+        return _items(10) if len(calls) == 1 else _items(60)
+
+    analyze_article(conn, aid, runner=runner)
+    row = conn.execute("SELECT status, payload_json FROM analysis WHERE article_id=?", (aid,)).fetchone()
+    assert len(calls) == 2
+    assert row["status"] == "ready"
+    assert len(json.loads(row["payload_json"])) == 60
+
+
+def test_persistently_low_output_marks_analysis_failed(tmp_path):
+    conn = init_db(str(tmp_path / "t.db"))
+    aid = _article(conn, " ".join(["word"] * 500))
+    calls = []
+
+    def runner(prompt):
+        calls.append(prompt)
+        return _items(10)
+
+    analyze_article(conn, aid, runner=runner)
+    row = conn.execute("SELECT status, error FROM analysis WHERE article_id=?", (aid,)).fetchone()
+    assert len(calls) == 2
+    assert row["status"] == "failed"
+    assert "低产出" in row["error"]
+
+
+def test_short_chunk_skips_density_check(tmp_path):
+    conn = init_db(str(tmp_path / "t.db"))
+    aid = _article(conn, " ".join(["word"] * 100))
+    calls = []
+
+    def runner(prompt):
+        calls.append(prompt)
+        return _items(1)
+
+    analyze_article(conn, aid, runner=runner)
+    row = conn.execute("SELECT status FROM analysis WHERE article_id=?", (aid,)).fetchone()
+    assert len(calls) == 1
+    assert row["status"] == "ready"
+
+
+def test_density_check_starts_at_199_words(tmp_path):
+    conn = init_db(str(tmp_path / "t.db"))
+    aid = _article(conn, " ".join(["word"] * 199))
+    calls = []
+
+    def runner(prompt):
+        calls.append(prompt)
+        return _items(1)
+
+    analyze_article(conn, aid, runner=runner)
+    assert len(calls) == 1
+
+
+def test_density_check_applies_at_200_words(tmp_path):
+    conn = init_db(str(tmp_path / "t.db"))
+    aid = _article(conn, " ".join(["word"] * 200))
+    calls = []
+
+    def runner(prompt):
+        calls.append(prompt)
+        return _items(1)
+
+    analyze_article(conn, aid, runner=runner)
+    row = conn.execute("SELECT status FROM analysis WHERE article_id=?", (aid,)).fetchone()
+    assert len(calls) == 2
+    assert row["status"] == "failed"
+
+
+def test_low_output_chunk_does_not_discard_other_chunks(tmp_path):
+    conn = init_db(str(tmp_path / "t.db"))
+    text = " ".join(["a"] * 500 + ["marker"] + ["b"] * 499)
+    aid = _article(conn, text)
+    calls = []
+
+    def runner(prompt):
+        calls.append("marker" if "marker" in prompt else "plain")
+        return _items(10) if "marker" in prompt else _items(60)
+
+    analyze_article(conn, aid, runner=runner)
+    row = conn.execute("SELECT status, payload_json FROM analysis WHERE article_id=?", (aid,)).fetchone()
+    assert calls.count("plain") == 1
+    assert calls.count("marker") == 2
+    assert row["status"] == "ready"
+    assert len(json.loads(row["payload_json"])) == 60
+
+
+def test_chunk_model_call_error_is_not_retried_and_others_kept(tmp_path):
+    conn = init_db(str(tmp_path / "t.db"))
+    text = " ".join(["a"] * 500 + ["marker"] + ["b"] * 499)
+    aid = _article(conn, text)
+    calls = []
+
+    def runner(prompt):
+        if "marker" in prompt:
+            calls.append("marker")
+            raise ModelCallError("boom")
+        calls.append("plain")
+        return _items(60)
+
+    analyze_article(conn, aid, runner=runner)
+    row = conn.execute("SELECT status, payload_json FROM analysis WHERE article_id=?", (aid,)).fetchone()
+    assert calls.count("marker") == 1
+    assert row["status"] == "ready"
+    assert len(json.loads(row["payload_json"])) == 60

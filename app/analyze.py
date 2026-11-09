@@ -22,6 +22,8 @@ logger = logging.getLogger(__name__)
 DEFAULT_CHUNK_WORDS = 500
 DEFAULT_TIMEOUT = 300
 WORDS_PER_ITEM = 5
+MIN_DENSITY_WORDS = 200
+LOW_OUTPUT_RATIO = 0.5
 SNIPPET_MODEL = "haiku"
 PREANALYSIS_WORKERS = 6
 
@@ -147,13 +149,20 @@ def run_claude(prompt: str, timeout: int = DEFAULT_TIMEOUT,
     return outer.get("result", proc.stdout)
 
 
-def _run_with_retry(runner: Runner, prompt: str) -> list[dict]:
+def _run_with_retry(runner: Runner, prompt: str, min_items: int = 0) -> list[dict]:
+    retry = False
     try:
-        return parse_items(runner(prompt))
+        items = parse_items(runner(prompt))
     except ModelCallError:
         raise
     except AnalysisError:
-        return parse_items(runner(prompt + "\n\nReturn ONLY the JSON array."))
+        items, retry = [], True
+    if retry or len(items) < min_items:
+        items = parse_items(runner(prompt + "\n\nReturn ONLY the JSON array."))
+    if len(items) < min_items:
+        logger.warning("low-output chunk: %d items, minimum %d", len(items), min_items)
+        raise AnalysisError(f"低产出：{len(items)} 条（下限 {min_items}）")
+    return items
 
 
 SNIPPET_TEMPLATE = """A reader selected "{term}" in the sentence below.
@@ -219,7 +228,10 @@ def map_grammar_category(conn: sqlite3.Connection, category: str) -> int:
 
 
 def _analyse_chunk(runner: Runner, chunk: str) -> list[dict]:
-    return _run_with_retry(runner, build_preanalysis_prompt(chunk))
+    words = len(chunk.split())
+    expected = max(1, round(words / WORDS_PER_ITEM))
+    min_items = (expected + 1) // 2 if words >= MIN_DENSITY_WORDS else 0
+    return _run_with_retry(runner, build_preanalysis_prompt(chunk), min_items=min_items)
 
 
 def analyze_article(conn: sqlite3.Connection, article_id: int,

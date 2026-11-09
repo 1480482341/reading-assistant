@@ -324,7 +324,7 @@ def test_review_page_shows_category_badge_and_groups_list(tmp_path):
     client = TestClient(create_app(db))
     assert 'id="card-category"' in client.get("/review").text
     js = client.get("/static/review.js").text
-    for needle in ("card-category", "group-head", "item.category"):
+    for needle in ("card-category", "group-head", "item.category", "groupRank"):
         assert needle in js
     css = client.get("/static/style.css").text
     for needle in (".cat-chip", ".group-head", ".card-category"):

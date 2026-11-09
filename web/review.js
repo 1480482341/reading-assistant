@@ -42,9 +42,14 @@ async function load() {
   render();
   const rows = await fetch("/api/entries").then(r => r.json());
   const body = document.getElementById("list-body");
+  const VOCABULARY_GROUP = "词汇与短语";
   const groupOf = row =>
-    row.kind === "grammar" && row.category ? row.category : "词汇与短语";
+    row.kind === "grammar" && row.category ? row.category : VOCABULARY_GROUP;
+  const groupRank = row => (groupOf(row) === VOCABULARY_GROUP ? 0 : 1);
   const sorted = rows.slice().sort((a, b) => {
+    const ra = groupRank(a);
+    const rb = groupRank(b);
+    if (ra !== rb) return ra - rb;
     const ga = groupOf(a);
     const gb = groupOf(b);
     if (ga !== gb) return ga.localeCompare(gb, "zh");

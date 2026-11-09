@@ -2,7 +2,8 @@ from fastapi.testclient import TestClient
 
 from app.db import init_db
 from app.main import create_app
-from app.shelf import add_to_shelf, in_shelf, record_open, remove_from_shelf
+from app.shelf import (add_to_shelf, history_rows, in_shelf, record_open,
+                       remove_from_shelf)
 
 NOW = "2026-11-06T10:00:00"
 
@@ -41,6 +42,24 @@ def test_record_open_counts_and_updates_last_opened(tmp_path):
     assert row["open_count"] == 2
     assert row["first_opened"] == "2026-11-01T09:00:00"
     assert row["last_opened"] == "2026-11-02T09:00:00"
+
+
+def test_history_rows_include_counts_and_shelf_state(tmp_path):
+    conn = _conn(tmp_path)
+    add_to_shelf(conn, 1, NOW)
+    record_open(conn, 1, NOW)
+    conn.execute(
+        "INSERT INTO annotations(article_id, para_index, start_offset, "
+        "end_offset, quote, color) VALUES(1, 0, 0, 4, 'body', 'red')")
+    conn.execute(
+        "INSERT INTO bookmarks(article_id, para_index, offset_ratio, label) "
+        "VALUES(1, 0, 0, 'mark')")
+    conn.commit()
+
+    row = history_rows(conn)[0]
+    assert row["in_shelf"] is True
+    assert row["annotation_count"] == 1
+    assert row["bookmark_count"] == 1
 
 
 def test_shelf_and_history_api(tmp_path):

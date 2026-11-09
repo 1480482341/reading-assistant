@@ -5,9 +5,6 @@ let historyItems = [];
 let shelfLoadError = false;
 let historyLoadError = false;
 let activeTab = "shelf";
-// /api/history rows carry no annotation/bookmark counts, so resolve them
-// from the library listing (all articles with counts) keyed by article id.
-const countsById = new Map();
 
 const shelfListEl = document.getElementById("shelf-list");
 const historyListEl = document.getElementById("history-list");
@@ -32,11 +29,8 @@ function metaHtml(item) {
 
 // "书签 N · 标色 M" for the item, or "" when the counts are unknown.
 function marksHtml(item) {
-  const row = (item.bookmark_count == null || item.annotation_count == null)
-    ? countsById.get(item.id)
-    : item;
-  if (!row || row.bookmark_count == null || row.annotation_count == null) return "";
-  return `书签 ${escapeHtml(row.bookmark_count)} · 标色 ${escapeHtml(row.annotation_count)}`;
+  if (item.bookmark_count == null || item.annotation_count == null) return "";
+  return `书签 ${escapeHtml(item.bookmark_count)} · 标色 ${escapeHtml(item.annotation_count)}`;
 }
 
 function historyHtml(item) {
@@ -53,15 +47,14 @@ function renderList(listEl, items, kind) {
     li.dataset.id = item.id;
     const marks = marksHtml(item);
     const extra = kind === "shelf" ? "" : `<div class="history-line">${historyHtml(item)}</div>`;
-    // History rows carry no shelf state, so resolve it from the library
-    // listing and disable the button for articles already on the shelf.
+    // The history endpoint carries shelf state, so the button starts
+    // disabled for articles already on the shelf.
     let btnLabel;
     let btnDisabled = false;
     if (kind === "shelf") {
       btnLabel = "移出书架";
     } else {
-      const row = countsById.get(item.id);
-      const inShelf = Boolean(row && row.in_shelf);
+      const inShelf = Boolean(item.in_shelf);
       btnLabel = inShelf ? "已在书架" : "加入书架";
       btnDisabled = inShelf;
     }
@@ -136,10 +129,9 @@ function getJson(url) {
 }
 
 async function load() {
-  const [shelfResult, historyResult, libraryResult] = await Promise.allSettled([
+  const [shelfResult, historyResult] = await Promise.allSettled([
     getJson("/api/shelf"),
     getJson("/api/history"),
-    getJson("/api/articles/library"),
   ]);
   if (shelfResult.status === "fulfilled") {
     shelfItems = shelfResult.value;
@@ -154,10 +146,6 @@ async function load() {
   } else {
     historyItems = [];
     historyLoadError = true;
-  }
-  countsById.clear();
-  if (libraryResult.status === "fulfilled") {
-    for (const row of libraryResult.value) countsById.set(row.id, row);
   }
   render();
 }

@@ -78,11 +78,17 @@ def record_open(conn: sqlite3.Connection, article_id: int, now: str) -> None:
 
 
 def history_rows(conn: sqlite3.Connection) -> list[dict]:
-    """List reading history, most recently opened first."""
+    """List reading history, most recently opened first, with the counts and
+    shelf state the shelf page renders."""
     rows = conn.execute(
         "SELECT a.id, a.title, a.title_zh, a.source, a.topic, a.status, "
-        "h.open_count, h.last_opened "
+        "h.open_count, h.last_opened, "
+        "EXISTS(SELECT 1 FROM shelf s WHERE s.article_id = a.id) AS in_shelf, "
+        "(SELECT COUNT(*) FROM annotations an WHERE an.article_id = a.id) "
+        "AS annotation_count, "
+        "(SELECT COUNT(*) FROM bookmarks bk WHERE bk.article_id = a.id) "
+        "AS bookmark_count "
         "FROM reading_history h JOIN articles a ON a.id = h.article_id "
         "ORDER BY h.last_opened DESC, a.id DESC"
     ).fetchall()
-    return [dict(row) for row in rows]
+    return [{**dict(row), "in_shelf": bool(row["in_shelf"])} for row in rows]

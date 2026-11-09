@@ -71,10 +71,30 @@ def test_paragraph_index_out_of_range_rejected(tmp_path):
         add_annotation(_conn(tmp_path), 1, 9, 0, 5, "x", "red")
 
 
+def test_end_offset_past_paragraph_end_rejected(tmp_path):
+    with pytest.raises(ValueError):
+        add_annotation(_conn(tmp_path), 1, 0, 0, 999, "x", "red")
+
+
+def test_end_offset_equal_to_paragraph_length_accepted(tmp_path):
+    conn = _conn(tmp_path)
+    para = "First paragraph here."
+    add_annotation(conn, 1, 0, 0, len(para), para, "red")
+    assert len(list_annotations(conn, 1)) == 1
+
+
 def test_quote_mismatch_is_dropped_on_read(tmp_path):
     conn = _conn(tmp_path)
     add_annotation(conn, 1, 0, 0, 9, "NOPE", "red")
     assert list_annotations(conn, 1) == []
+
+
+def test_stale_annotation_is_deleted_on_read(tmp_path):
+    conn = _conn(tmp_path)
+    add_annotation(conn, 1, 0, 0, 9, "NOPE", "red")
+    list_annotations(conn, 1)
+    remaining = conn.execute("SELECT COUNT(*) FROM annotations").fetchone()[0]
+    assert remaining == 0
 
 
 def test_update_color_and_delete(tmp_path):

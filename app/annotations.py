@@ -55,7 +55,8 @@ def add_annotation(conn: sqlite3.Connection, article_id: int,
         raise ValueError(f"para_index {para_index} out of range")
     if color not in COLORS:
         raise ValueError(f"invalid color {color!r}")
-    if not 0 <= start_offset < end_offset:
+    para = paras[para_index]
+    if not 0 <= start_offset < end_offset <= len(para):
         raise ValueError(f"invalid range [{start_offset}, {end_offset})")
     # Delete overlapping rows in the same paragraph within the same
     # transaction, so the insert below atomically replaces them.
@@ -96,21 +97,28 @@ def list_annotations(conn: sqlite3.Connection,
         (article_id,),
     ).fetchall()
     result = []
+    stale_ids = []
     for row in rows:
         para_index = row["para_index"]
         start_offset = row["start_offset"]
         end_offset = row["end_offset"]
         if not 0 <= para_index < len(paras):
             logger.warning("dropping stale annotation %s", row["id"])
+            stale_ids.append(row["id"])
             continue
         para = paras[para_index]
         if not 0 <= start_offset < end_offset <= len(para):
             logger.warning("dropping stale annotation %s", row["id"])
+            stale_ids.append(row["id"])
             continue
         if para[start_offset:end_offset].strip() != row["quote"].strip():
             logger.warning("dropping stale annotation %s", row["id"])
+            stale_ids.append(row["id"])
             continue
         result.append(dict(row))
+    if stale_ids:
+        conn.executemany("DELETE FROM annotations WHERE id = ?",
+                         [(stale_id,) for stale_id in stale_ids])
     conn.commit()
     return result
 

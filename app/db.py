@@ -4,7 +4,7 @@ from pathlib import Path
 from app.grammar import seed_grammar_categories
 from app.sources import normalize_published_at
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS articles (
@@ -49,6 +49,7 @@ CREATE TABLE IF NOT EXISTS entries (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
     kind       TEXT NOT NULL,
     lemma      TEXT NOT NULL,
+    category   TEXT NOT NULL DEFAULT '',
     created_at TEXT DEFAULT (datetime('now')),
     UNIQUE(kind, lemma)
 );
@@ -187,6 +188,12 @@ def init_db(path: str) -> sqlite3.Connection:
                 _normalize_stored_dates(conn)
             if version < 3:
                 _archive_legacy_grammar_terms(conn)
+            if version < 4:
+                entry_cols = {r["name"] for r in conn.execute(
+                    "PRAGMA table_info(entries)")}
+                if "category" not in entry_cols:
+                    conn.execute(
+                        "ALTER TABLE entries ADD COLUMN category TEXT NOT NULL DEFAULT ''")
             conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
             conn.commit()
     except sqlite3.DatabaseError as exc:

@@ -38,7 +38,7 @@ def test_old_db_gets_title_zh_column_migrated(tmp_path):
 
 def test_init_db_stamps_schema_version(tmp_path):
     conn = init_db(str(tmp_path / "t.db"))
-    assert conn.execute("PRAGMA user_version").fetchone()[0] == 3
+    assert conn.execute("PRAGMA user_version").fetchone()[0] == 4
     assert conn.execute(
         "SELECT 1 FROM grammar_terms WHERE label='定语从句' AND status='active'"
     ).fetchone()
@@ -67,7 +67,7 @@ def test_legacy_phrase_vocabulary_is_archived_and_replaced(tmp_path):
     statuses = {row["status"] for row in migrated.execute(
         "SELECT status FROM grammar_terms")}
     assert statuses == {"active"}
-    assert migrated.execute("PRAGMA user_version").fetchone()[0] == 3
+    assert migrated.execute("PRAGMA user_version").fetchone()[0] == 4
 
 
 def test_date_migration_only_runs_for_old_databases(tmp_path):
@@ -104,9 +104,9 @@ def test_reading_annotation_tables_exist(tmp_path):
     assert {"annotations", "bookmarks", "shelf", "reading_history"} <= names
 
 
-def test_schema_version_is_three(tmp_path):
+def test_schema_version_is_four(tmp_path):
     conn = init_db(str(tmp_path / "t.db"))
-    assert conn.execute("PRAGMA user_version").fetchone()[0] == 3
+    assert conn.execute("PRAGMA user_version").fetchone()[0] == 4
 
 
 def test_v1_database_upgrades_and_keeps_rows(tmp_path):
@@ -119,11 +119,37 @@ def test_v1_database_upgrades_and_keeps_rows(tmp_path):
     raw.close()
 
     conn = init_db(str(p))
-    assert conn.execute("PRAGMA user_version").fetchone()[0] == 3
+    assert conn.execute("PRAGMA user_version").fetchone()[0] == 4
     assert conn.execute("SELECT title FROM articles").fetchone()["title"] == "Old"
     names = {r["name"] for r in conn.execute(
         "SELECT name FROM sqlite_master WHERE type='table'")}
     assert {"annotations", "bookmarks", "shelf", "reading_history"} <= names
+
+
+def test_entries_table_has_category_column(tmp_path):
+    conn = init_db(str(tmp_path / "t.db"))
+    cols = {r["name"] for r in conn.execute("PRAGMA table_info(entries)")}
+    assert "category" in cols
+
+
+def test_v3_database_gains_entry_category(tmp_path):
+    p = tmp_path / "old.db"
+    raw = sqlite3.connect(str(p))
+    raw.execute(
+        "CREATE TABLE entries (id INTEGER PRIMARY KEY AUTOINCREMENT, "
+        "kind TEXT NOT NULL, lemma TEXT NOT NULL, "
+        "created_at TEXT DEFAULT (datetime('now')), UNIQUE(kind, lemma))")
+    raw.execute("INSERT INTO entries(kind, lemma) VALUES('grammar', 'having started')")
+    raw.execute("PRAGMA user_version = 3")
+    raw.commit()
+    raw.close()
+
+    conn = init_db(str(p))
+    cols = {r["name"] for r in conn.execute("PRAGMA table_info(entries)")}
+    assert "category" in cols
+    row = conn.execute("SELECT kind, lemma, category FROM entries").fetchone()
+    assert tuple(row) == ("grammar", "having started", "")
+    assert conn.execute("PRAGMA user_version").fetchone()[0] == 4
 
 
 def test_deleting_article_cascades_marks(tmp_path):

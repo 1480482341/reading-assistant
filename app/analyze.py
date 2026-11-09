@@ -157,8 +157,10 @@ def _run_with_retry(runner: Runner, prompt: str) -> list[dict]:
 
 
 SNIPPET_TEMPLATE = """A reader selected "{term}" in the sentence below.
-Return ONLY a JSON array with one object with keys: term, type, gloss_zh, grammar_role, sentence, why.
+Return ONLY a JSON array with one object with keys: term, type, gloss_zh, grammar_role, grammar_category, sentence, why.
+grammar_category is only for type "grammar": copy one label exactly from the list below, or use 其他.
 Write gloss_zh, grammar_role and why in Chinese.
+GRAMMAR CATEGORIES: {categories}
 
 SENTENCE: {sentence}
 """
@@ -183,7 +185,9 @@ def analyze_snippet(conn: sqlite3.Connection, article_id: int, needle: str,
     row = conn.execute("SELECT text FROM articles WHERE id = ?", (article_id,)).fetchone()
     body = row["text"] if row else ""
     sentence = find_sentence(body, needle)
-    prompt = SNIPPET_TEMPLATE.format(term=needle, sentence=sentence)
+    prompt = SNIPPET_TEMPLATE.format(
+        term=needle, sentence=sentence,
+        categories="、".join(GRAMMAR_CATEGORIES))
     items = _run_with_retry(runner, prompt)
     if not items:
         raise AnalysisError("模型未返回条目")

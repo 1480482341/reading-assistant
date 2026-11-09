@@ -315,6 +315,22 @@ def test_model_call_failure_is_not_retried(tmp_path):
     assert len(calls) == 1
 
 
+def test_snippet_prompt_offers_controlled_grammar_categories(tmp_path):
+    from app.analyze import analyze_snippet
+    conn = init_db(str(tmp_path / "t.db"))
+    conn.execute("INSERT INTO articles(url,title,text) VALUES('u','t','albeit short')")
+    conn.commit()
+    captured = {}
+
+    def runner(prompt):
+        captured["prompt"] = prompt
+        return '[{"term":"albeit"}]'
+
+    analyze_snippet(conn, 1, "albeit", runner=runner)
+    assert "grammar_category" in captured["prompt"]
+    assert "过去分词" in captured["prompt"]
+
+
 def test_default_db_path_is_absolute():
     from app import main
     assert main.DB_PATH.is_absolute()

@@ -294,3 +294,43 @@ def test_word_occurrence_has_no_category(tmp_path):
         "item": item})
     conn = connect(str(tmp_path / "t.db"))
     assert conn.execute("SELECT category FROM entries").fetchone()["category"] == ""
+
+
+def test_marks_include_entry_category(tmp_path):
+    db = str(tmp_path / "t.db")
+    conn = init_db(db)
+    conn.execute("INSERT INTO articles(id,url,title,text,status) "
+                 "VALUES(1,'u','t','body','ready')")
+    conn.execute("INSERT INTO entries(id,kind,lemma,category) "
+                 "VALUES(2,'grammar','inversion','倒装')")
+    conn.execute("INSERT INTO occurrences(entry_id,article_id,sentence,surface,gloss) "
+                 "VALUES(2,1,'s','never have I','倒装')")
+    conn.commit()
+    conn.close()
+    body = TestClient(create_app(db)).get("/api/articles/1/marks").json()
+    assert body["grammar"][0]["category"] == "倒装"
+
+
+def test_review_queue_includes_category(tmp_path):
+    db = str(tmp_path / "t.db")
+    conn = init_db(db)
+    conn.execute("INSERT INTO entries(id,kind,lemma,category) "
+                 "VALUES(1,'grammar','inversion','倒装')")
+    conn.execute("INSERT INTO review(entry_id,bucket,due_at,last_seen_at,"
+                 "consecutive_known,graduated) "
+                 "VALUES(1,0,'2000-01-01','2000-01-01',0,0)")
+    conn.commit()
+    conn.close()
+    row = TestClient(create_app(db)).get("/api/review/queue").json()[0]
+    assert row["category"] == "倒装"
+
+
+def test_entries_endpoint_includes_category(tmp_path):
+    db = str(tmp_path / "t.db")
+    conn = init_db(db)
+    conn.execute("INSERT INTO entries(kind,lemma,category) "
+                 "VALUES('grammar','inversion','倒装')")
+    conn.commit()
+    conn.close()
+    row = TestClient(create_app(db)).get("/api/entries").json()[0]
+    assert row["category"] == "倒装"

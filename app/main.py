@@ -400,7 +400,7 @@ def create_app(db_path: str, runner: Runner | None = None) -> FastAPI:
         conn = open_db()
         try:
             rows = conn.execute(
-                "SELECT e.kind, e.lemma, o.gloss, o.grammar_role, o.why "
+                "SELECT e.kind, e.lemma, e.category, o.gloss, o.grammar_role, o.why "
                 "FROM occurrences o JOIN entries e ON e.id = o.entry_id "
                 "WHERE o.article_id = ?",
                 (article_id,),
@@ -413,6 +413,7 @@ def create_app(db_path: str, runner: Runner | None = None) -> FastAPI:
                     "gloss_zh": row["gloss"],
                     "grammar_role": row["grammar_role"],
                     "why": row["why"],
+                    "category": row["category"],
                 }
                 if row["kind"] == "grammar":
                     grammar.append(item)

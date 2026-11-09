@@ -3,7 +3,7 @@ import io
 import sqlite3
 
 QUERY = """
-SELECT e.kind, e.lemma, COUNT(o.id) AS count,
+SELECT e.kind, e.lemma, e.category, COUNT(o.id) AS count,
        COALESCE(latest.gloss, '') AS gloss,
        COALESCE(latest.sentence, '') AS sentence,
        COALESCE(a.url, '') AS article_url

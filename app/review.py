@@ -47,7 +47,7 @@ def grade(conn: sqlite3.Connection, entry_id: int, known: bool, now: str) -> Non
 
 def due_queue(conn: sqlite3.Connection, now: str, limit: int = 50) -> list[sqlite3.Row]:
     return conn.execute(
-        "SELECT r.entry_id, e.kind, e.lemma, r.bucket, r.due_at, "
+        "SELECT r.entry_id, e.kind, e.lemma, e.category, r.bucket, r.due_at, "
         "COALESCE(o.gloss, '') AS gloss, COALESCE(o.sentence, '') AS sentence, "
         "(SELECT COUNT(*) FROM occurrences o2 WHERE o2.entry_id = e.id) AS count "
         "FROM review r JOIN entries e ON e.id = r.entry_id "

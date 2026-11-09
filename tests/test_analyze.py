@@ -4,8 +4,8 @@ import pytest
 
 from app.db import init_db
 from app.analyze import (
-    chunk_text, parse_items, AnalysisError, map_grammar_term, analyze_article,
-    build_preanalysis_prompt, run_claude,
+    chunk_text, parse_items, AnalysisError, map_grammar_category,
+    analyze_article, build_preanalysis_prompt, run_claude,
 )
 
 
@@ -38,11 +38,29 @@ def test_parse_raises_on_garbage():
         parse_items("not json at all")
 
 
-def test_grammar_label_maps_to_same_id(tmp_path):
+def test_same_grammar_category_maps_to_same_id(tmp_path):
     conn = init_db(str(tmp_path / "t.db"))
-    a = map_grammar_term(conn, "插入语")
-    b = map_grammar_term(conn, "插入语")
+    a = map_grammar_category(conn, "定语从句")
+    b = map_grammar_category(conn, "定语从句")
     assert a == b
+
+
+def test_unknown_grammar_category_falls_back_to_other(tmp_path):
+    conn = init_db(str(tmp_path / "t.db"))
+    mapped = map_grammar_category(conn, "模型编出来的类别")
+    other = conn.execute(
+        "SELECT id FROM grammar_terms WHERE label='其他'").fetchone()["id"]
+    assert mapped == other
+    assert conn.execute(
+        "SELECT 1 FROM grammar_terms WHERE label='模型编出来的类别'"
+    ).fetchone() is None
+
+
+def test_preanalysis_prompt_offers_controlled_grammar_categories():
+    prompt = build_preanalysis_prompt(" ".join(["word"] * 50))
+    assert "grammar_category" in prompt
+    assert "定语从句" in prompt
+    assert "其他" in prompt
 
 
 def test_analyze_article_marks_failure_without_crashing(tmp_path):
@@ -240,13 +258,20 @@ def test_reanalysis_clears_lookup_cache(tmp_path):
     assert left == 0
 
 
-def test_grammar_items_register_in_grammar_terms(tmp_path):
+def test_grammar_items_register_their_category_not_their_phrase(tmp_path):
     conn = init_db(str(tmp_path / "t.db"))
     conn.execute("INSERT INTO articles(url,title,text,status) VALUES('u','t','short text','pending')")
     conn.commit()
     aid = conn.execute("SELECT id FROM articles").fetchone()["id"]
-    analyze_article(conn, aid, runner=lambda p: '[{"term":"插入语","type":"grammar"}]')
-    assert conn.execute("SELECT 1 FROM grammar_terms WHERE label='插入语'").fetchone()
+    analyze_article(conn, aid, runner=lambda p: (
+        '[{"term":"having started down","type":"grammar",'
+        '"grammar_category":"过去分词"}]'))
+    row = conn.execute(
+        "SELECT status FROM grammar_terms WHERE label='过去分词'").fetchone()
+    assert row["status"] == "active"
+    assert conn.execute(
+        "SELECT 1 FROM grammar_terms WHERE label='having started down'"
+    ).fetchone() is None
 
 
 def test_parse_tolerates_brackets_in_surrounding_prose():

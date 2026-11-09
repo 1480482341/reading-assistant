@@ -38,7 +38,36 @@ def test_old_db_gets_title_zh_column_migrated(tmp_path):
 
 def test_init_db_stamps_schema_version(tmp_path):
     conn = init_db(str(tmp_path / "t.db"))
-    assert conn.execute("PRAGMA user_version").fetchone()[0] == 2
+    assert conn.execute("PRAGMA user_version").fetchone()[0] == 3
+    assert conn.execute(
+        "SELECT 1 FROM grammar_terms WHERE label='定语从句' AND status='active'"
+    ).fetchone()
+
+
+def test_legacy_phrase_vocabulary_is_archived_and_replaced(tmp_path):
+    db = str(tmp_path / "t.db")
+    conn = init_db(db)
+    conn.execute("DELETE FROM grammar_terms")
+    conn.execute(
+        "INSERT INTO grammar_terms(label, status) VALUES"
+        "('have yet to observe', 'pending'),"
+        "('while working at Google', 'pending')")
+    conn.execute("PRAGMA user_version = 2")
+    conn.commit()
+    conn.close()
+
+    migrated = init_db(db)
+    legacy = {row["label"] for row in migrated.execute(
+        "SELECT label FROM grammar_terms_legacy")}
+    assert legacy == {"have yet to observe", "while working at Google"}
+    labels = {row["label"] for row in migrated.execute(
+        "SELECT label FROM grammar_terms")}
+    assert "have yet to observe" not in labels
+    assert "定语从句" in labels
+    statuses = {row["status"] for row in migrated.execute(
+        "SELECT status FROM grammar_terms")}
+    assert statuses == {"active"}
+    assert migrated.execute("PRAGMA user_version").fetchone()[0] == 3
 
 
 def test_date_migration_only_runs_for_old_databases(tmp_path):
@@ -75,9 +104,9 @@ def test_reading_annotation_tables_exist(tmp_path):
     assert {"annotations", "bookmarks", "shelf", "reading_history"} <= names
 
 
-def test_schema_version_is_two(tmp_path):
+def test_schema_version_is_three(tmp_path):
     conn = init_db(str(tmp_path / "t.db"))
-    assert conn.execute("PRAGMA user_version").fetchone()[0] == 2
+    assert conn.execute("PRAGMA user_version").fetchone()[0] == 3
 
 
 def test_v1_database_upgrades_and_keeps_rows(tmp_path):
@@ -90,7 +119,7 @@ def test_v1_database_upgrades_and_keeps_rows(tmp_path):
     raw.close()
 
     conn = init_db(str(p))
-    assert conn.execute("PRAGMA user_version").fetchone()[0] == 2
+    assert conn.execute("PRAGMA user_version").fetchone()[0] == 3
     assert conn.execute("SELECT title FROM articles").fetchone()["title"] == "Old"
     names = {r["name"] for r in conn.execute(
         "SELECT name FROM sqlite_master WHERE type='table'")}

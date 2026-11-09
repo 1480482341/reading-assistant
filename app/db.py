@@ -1,9 +1,10 @@
 import sqlite3
 from pathlib import Path
 
+from app.grammar import seed_grammar_categories
 from app.sources import normalize_published_at
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS articles (
@@ -70,6 +71,14 @@ CREATE TABLE IF NOT EXISTS grammar_terms (
     aliases     TEXT DEFAULT '',
     description TEXT DEFAULT '',
     status      TEXT DEFAULT 'active'
+);
+
+CREATE TABLE IF NOT EXISTS grammar_terms_legacy (
+    id          INTEGER PRIMARY KEY,
+    label       TEXT,
+    aliases     TEXT,
+    description TEXT,
+    status      TEXT
 );
 
 CREATE TABLE IF NOT EXISTS review (
@@ -154,6 +163,16 @@ def _normalize_stored_dates(conn: sqlite3.Connection) -> None:
     conn.commit()
 
 
+def _archive_legacy_grammar_terms(conn: sqlite3.Connection) -> None:
+    """Move the old free-phrase labels aside, then reseed the vocabulary."""
+    conn.execute(
+        "INSERT INTO grammar_terms_legacy(id, label, aliases, description, status) "
+        "SELECT id, label, aliases, description, status FROM grammar_terms")
+    conn.execute("DELETE FROM grammar_terms")
+    conn.commit()
+    seed_grammar_categories(conn)
+
+
 def init_db(path: str) -> sqlite3.Connection:
     conn = connect(path)
     try:
@@ -162,9 +181,12 @@ def init_db(path: str) -> sqlite3.Connection:
         if "title_zh" not in cols:
             conn.execute("ALTER TABLE articles ADD COLUMN title_zh TEXT")
         conn.commit()
-        if conn.execute("PRAGMA user_version").fetchone()[0] < SCHEMA_VERSION:
-            if "published_at" in cols:
+        version = conn.execute("PRAGMA user_version").fetchone()[0]
+        if version < SCHEMA_VERSION:
+            if version < 2 and "published_at" in cols:
                 _normalize_stored_dates(conn)
+            if version < 3:
+                _archive_legacy_grammar_terms(conn)
             conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
             conn.commit()
     except sqlite3.DatabaseError as exc:

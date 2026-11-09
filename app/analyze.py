@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 import re
 import shutil
@@ -8,7 +9,12 @@ import tempfile
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Callable
 
+from app.grammar import (FALLBACK_CATEGORY, GRAMMAR_CATEGORIES,
+                         normalize_grammar_category)
+
 Runner = Callable[[str], str]
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_CHUNK_WORDS = 800
 DEFAULT_TIMEOUT = 300
@@ -25,11 +31,14 @@ Each element must have these keys:
   type          one of "word", "phrase", "grammar"
   gloss_zh      a short Chinese gloss, at most 12 characters
   grammar_role  the grammatical role in its sentence, in Chinese
+  grammar_category  only when type is "grammar": one label copied exactly from the list below, or 其他 when none fits
   sentence      the sentence it appears in, copied verbatim
   why           one or two sentences in Chinese explaining why this construction is used
 
 Cover difficult vocabulary, collocations, and grammar points a CET-4 level reader would stumble on.
 Treat ordinary-looking words as difficult when the context changes their meaning.
+For grammar items keep term as the phrase from the passage and put the category in grammar_category.
+GRAMMAR CATEGORIES: {categories}
 List each distinct term once; do not repeat near-duplicates.
 Aim for about {target} items for this passage (roughly one per {words_per_item} words);
 fewer is fine when the passage has few difficult constructions.
@@ -95,7 +104,8 @@ def parse_items(raw: str) -> list[dict]:
 def build_preanalysis_prompt(chunk: str) -> str:
     target = max(1, round(len(chunk.split()) / WORDS_PER_ITEM))
     return PROMPT_TEMPLATE.format(target=target,
-                                  words_per_item=WORDS_PER_ITEM) + chunk
+                                  words_per_item=WORDS_PER_ITEM,
+                                  categories="、".join(GRAMMAR_CATEGORIES)) + chunk
 
 
 _MODEL_CWD: str | None = None
@@ -179,7 +189,17 @@ def analyze_snippet(conn: sqlite3.Connection, article_id: int, needle: str,
     return item
 
 
-def map_grammar_term(conn: sqlite3.Connection, label: str) -> int:
+def map_grammar_category(conn: sqlite3.Connection, category: str) -> int:
+    """Map a model-supplied category to its vocabulary row.
+
+    Anything outside the controlled list collapses to 其他, so the table never
+    accumulates one-off phrase labels again.
+    """
+    raw = str(category or "").strip()
+    label = normalize_grammar_category(raw)
+    if raw and raw not in GRAMMAR_CATEGORIES:
+        logger.warning("unknown grammar category %r mapped to %s",
+                       raw, FALLBACK_CATEGORY)
     row = conn.execute("SELECT id FROM grammar_terms WHERE label = ?", (label,)).fetchone()
     if row:
         return row["id"]
@@ -230,7 +250,7 @@ def analyze_article(conn: sqlite3.Connection, article_id: int,
                 merged[key] = item
         for item in merged.values():
             if item.get("type") == "grammar":
-                map_grammar_term(conn, str(item["term"]))
+                map_grammar_category(conn, str(item.get("grammar_category") or ""))
         payload = json.dumps(list(merged.values()), ensure_ascii=False)
     except AnalysisError as exc:
         status, error = "failed", str(exc)

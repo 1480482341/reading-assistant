@@ -1,8 +1,7 @@
 import logging
 import sqlite3
 
-from app.analyze import (AnalysisError, ModelCallError, Runner, _loads_array,
-                         run_claude)
+from app.analyze import AnalysisError, ModelCallError, Runner, _loads_array, run_claude
 
 logger = logging.getLogger(__name__)
 
@@ -76,7 +75,7 @@ def _parse_with_retry(runner: Runner, prompt: str, expected: int) -> list[dict]:
         return attempt(prompt)
     except ModelCallError:
         raise
-    except Exception:
+    except Exception:  # noqa: BLE001 - retry once on any parse failure
         return attempt(prompt + "\n\nReturn ONLY the JSON array.")
 
 

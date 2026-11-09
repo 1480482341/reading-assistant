@@ -71,7 +71,9 @@ def add_annotation(conn: sqlite3.Connection, article_id: int,
         (article_id, para_index, start_offset, end_offset, quote, color),
     )
     conn.commit()
-    return cur.lastrowid
+    new_id = cur.lastrowid
+    assert new_id is not None, "INSERT must set lastrowid"
+    return new_id
 
 
 def list_annotations(conn: sqlite3.Connection,

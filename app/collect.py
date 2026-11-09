@@ -12,7 +12,7 @@ from app.sources import fetch_bytes, fetch_items, ingest_article, seed_sources
 
 logger = logging.getLogger(__name__)
 
-TITLE_RE = re.compile(r"<title[^>]*>(.*?)</title>", re.S | re.I)
+TITLE_RE = re.compile(r"<title[^>]*>(.*?)</title>", re.DOTALL | re.IGNORECASE)
 
 
 def ingest_text(conn: sqlite3.Connection, title: str, text: str,

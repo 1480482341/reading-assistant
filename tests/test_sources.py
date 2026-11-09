@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from app.db import init_db
-from app.sources import fetch_items, extract_text, ingest_article
+from app.sources import extract_text, fetch_items, ingest_article
 
 FIX = Path(__file__).parent / "fixtures"
 

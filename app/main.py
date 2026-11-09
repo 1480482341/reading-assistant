@@ -10,8 +10,12 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from app.analyze import AnalysisError, Runner, analyze_snippet
-from app.annotations import (add_annotation, delete_annotation,
-                             list_annotations, update_annotation_color)
+from app.annotations import (
+    add_annotation,
+    delete_annotation,
+    list_annotations,
+    update_annotation_color,
+)
 from app.bookmarks import add_bookmark, delete_bookmark, list_bookmarks
 from app.collect import ingest_pdf, ingest_text, ingest_url, start_startup_job
 from app.db import connect, init_db, insert_occurrence, upsert_entry
@@ -20,8 +24,14 @@ from app.library import library_rows
 from app.lookup import cached_item, find_analysis_item, normalize_term, store_item
 from app.metadata import INTEREST_TAGS
 from app.review import due_queue, ensure_review, grade
-from app.shelf import (add_to_shelf, history_rows, in_shelf, record_open,
-                       remove_from_shelf, shelf_rows)
+from app.shelf import (
+    add_to_shelf,
+    history_rows,
+    in_shelf,
+    record_open,
+    remove_from_shelf,
+    shelf_rows,
+)
 from app.sources import pick_today
 
 MAX_SELECTION = 500
@@ -115,7 +125,7 @@ def create_app(db_path: str, runner: Runner | None = None) -> FastAPI:
         try:
             conn.execute("SELECT 1").fetchone()
             db_status = "ok"
-        except Exception:
+        except Exception:  # noqa: BLE001 - any DB failure means degraded
             db_status = "error"
         finally:
             conn.close()
@@ -125,13 +135,17 @@ def create_app(db_path: str, runner: Runner | None = None) -> FastAPI:
     def ingest(body: IngestBody):
         conn = open_db()
         try:
-            if (body.text or "").strip():
+            text = body.text
+            url = body.url
+            pdf_path = body.pdf_path
+            article_id: int | None
+            if text is not None and text.strip():
                 article_id = ingest_text(conn, body.title or "Untitled",
-                                         body.text, body.topic or "manual")
-            elif (body.url or "").strip():
-                article_id = ingest_url(conn, body.url.strip(), body.topic or "manual")
-            elif (body.pdf_path or "").strip():
-                article_id = ingest_pdf(conn, body.pdf_path.strip(),
+                                         text, body.topic or "manual")
+            elif url is not None and url.strip():
+                article_id = ingest_url(conn, url.strip(), body.topic or "manual")
+            elif pdf_path is not None and pdf_path.strip():
+                article_id = ingest_pdf(conn, pdf_path.strip(),
                                         body.topic or "manual")
             else:
                 raise HTTPException(status_code=400, detail="需要 text、url 或 pdf_path")

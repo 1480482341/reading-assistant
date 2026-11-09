@@ -122,8 +122,8 @@ def test_lookup_matches_word_inside_short_phrase(tmp_path):
     conn.execute("INSERT INTO articles(url,title,text,status) VALUES('u','t','body','ready')")
     conn.execute(
         "INSERT INTO analysis(article_id,status,payload_json) VALUES(1,'ready',?)",
-        ('[{"term":"come naturally to","type":"phrase","gloss_zh":"自然而然地"},'
-         '{"term":"naturally occurring","type":"phrase","gloss_zh":"天然存在的"}]',),
+        (('[{"term":"come naturally to","type":"phrase","gloss_zh":"自然而然地"},'
+          '{"term":"naturally occurring","type":"phrase","gloss_zh":"天然存在的"}]'),),
     )
     conn.commit()
     conn.close()
@@ -140,8 +140,8 @@ def test_lookup_matches_word_inside_longer_phrase(tmp_path):
     conn.execute("INSERT INTO articles(url,title,text,status) VALUES('u','t','body','ready')")
     conn.execute(
         "INSERT INTO analysis(article_id,status,payload_json) VALUES(1,'ready',?)",
-        ('[{"term":"a more consequential and thornier question","type":"phrase",'
-         '"gloss_zh":"更重大也更棘手的问题"}]',),
+        (('[{"term":"a more consequential and thornier question","type":"phrase",'
+          '"gloss_zh":"更重大也更棘手的问题"}]'),),
     )
     conn.commit()
     conn.close()
@@ -190,8 +190,8 @@ def test_lookup_phrase_tie_does_not_crash(tmp_path):
     conn.execute("INSERT INTO articles(url,title,text,status) VALUES('u','t','body','ready')")
     conn.execute(
         "INSERT INTO analysis(article_id,status,payload_json) VALUES(1,'ready',?)",
-        ('[{"term":"rooted in the","type":"phrase","gloss_zh":"根植于"},'
-         '{"term":"the rooted in","type":"phrase","gloss_zh":"根植其中"}]',),
+        (('[{"term":"rooted in the","type":"phrase","gloss_zh":"根植于"},'
+          '{"term":"the rooted in","type":"phrase","gloss_zh":"根植其中"}]'),),
     )
     conn.commit()
     conn.close()

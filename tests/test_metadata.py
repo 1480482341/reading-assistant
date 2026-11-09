@@ -1,6 +1,6 @@
+from app.analyze import ModelCallError
 from app.db import init_db
 from app.metadata import INTEREST_TAGS, enrich_metadata, parse_metadata
-from app.analyze import ModelCallError
 
 
 def test_vocabulary_has_sixteen_tags():

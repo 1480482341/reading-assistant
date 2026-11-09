@@ -1,7 +1,12 @@
 import pytest
 
-from app.annotations import (add_annotation, delete_annotation, list_annotations,
-                             split_paragraphs, update_annotation_color)
+from app.annotations import (
+    add_annotation,
+    delete_annotation,
+    list_annotations,
+    split_paragraphs,
+    update_annotation_color,
+)
 from app.db import init_db
 
 TEXT = "First paragraph here.\n\nSecond paragraph.\n\n\nThird one."

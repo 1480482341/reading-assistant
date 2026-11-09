@@ -2,11 +2,16 @@ import os
 
 import pytest
 
-from app.db import init_db
 from app.analyze import (
-    chunk_text, parse_items, AnalysisError, map_grammar_category,
-    analyze_article, build_preanalysis_prompt, run_claude,
+    AnalysisError,
+    analyze_article,
+    build_preanalysis_prompt,
+    chunk_text,
+    map_grammar_category,
+    parse_items,
+    run_claude,
 )
+from app.db import init_db
 
 
 def test_chunk_text_splits_on_word_count():
@@ -295,7 +300,7 @@ def test_parse_failure_is_retried_once(tmp_path):
 
 
 def test_model_call_failure_is_not_retried(tmp_path):
-    from app.analyze import analyze_snippet, ModelCallError
+    from app.analyze import ModelCallError, analyze_snippet
     conn = init_db(str(tmp_path / "t.db"))
     conn.execute("INSERT INTO articles(url,title,text) VALUES('u','t','albeit short')")
     conn.commit()
@@ -311,7 +316,7 @@ def test_model_call_failure_is_not_retried(tmp_path):
 
 
 def test_default_db_path_is_absolute():
-    import app.main as main
+    from app import main
     assert main.DB_PATH.is_absolute()
     assert main.DB_PATH.as_posix().endswith("data/library.db")
 

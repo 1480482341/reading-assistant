@@ -1,5 +1,5 @@
 from app.db import init_db
-from app.review import ensure_review, grade, due_queue
+from app.review import due_queue, ensure_review, grade
 
 NOW = "2026-11-05"
 

@@ -6,11 +6,14 @@ import shutil
 import sqlite3
 import subprocess
 import tempfile
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Callable
 
-from app.grammar import (FALLBACK_CATEGORY, GRAMMAR_CATEGORIES,
-                         normalize_grammar_category)
+from app.grammar import (
+    FALLBACK_CATEGORY,
+    GRAMMAR_CATEGORIES,
+    normalize_grammar_category,
+)
 
 Runner = Callable[[str], str]
 
@@ -65,7 +68,7 @@ def chunk_text(text: str, words_per_chunk: int = DEFAULT_CHUNK_WORDS) -> list[st
 
 def _loads_array(raw: str) -> list:
     raw = raw.strip()
-    fence = re.search(r"```(?:json)?\s*(.*?)```", raw, re.S)
+    fence = re.search(r"```(?:json)?\s*(.*?)```", raw, re.DOTALL)
     if fence:
         raw = fence.group(1).strip()
     try:
@@ -132,7 +135,7 @@ def run_claude(prompt: str, timeout: int = DEFAULT_TIMEOUT,
     try:
         proc = subprocess.run(cmd, input=prompt, capture_output=True, text=True,
                               encoding="utf-8", errors="replace", timeout=timeout,
-                              cwd=model_cwd())
+                              cwd=model_cwd(), check=False)
     except subprocess.TimeoutExpired as exc:
         raise ModelCallError(f"模型调用超时（{timeout}s）") from exc
     if proc.returncode != 0:

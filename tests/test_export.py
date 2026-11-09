@@ -1,5 +1,5 @@
 from app.db import init_db
-from app.export import export_markdown, export_csv
+from app.export import export_csv, export_markdown
 
 
 def _seed(conn):

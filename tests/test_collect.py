@@ -1,8 +1,8 @@
 import pytest
 from fastapi.testclient import TestClient
 
+from app.collect import collect_new, ingest_text
 from app.db import init_db
-from app.collect import ingest_text, collect_new
 from app.main import create_app
 
 
@@ -57,7 +57,6 @@ def test_ingest_endpoint_accepts_pasted_text(tmp_path):
 
 
 def test_analyze_pending_retries_stuck_running(tmp_path, monkeypatch):
-    from app.analyze import analyze_article
     from app.collect import analyze_pending
     db = str(tmp_path / "t.db")
     conn = init_db(db)

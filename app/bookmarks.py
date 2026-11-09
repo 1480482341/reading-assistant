@@ -46,7 +46,9 @@ def add_bookmark(conn: sqlite3.Connection, article_id: int,
         (article_id, para_index, offset_ratio, label),
     )
     conn.commit()
-    return cur.lastrowid
+    new_id = cur.lastrowid
+    assert new_id is not None, "INSERT must set lastrowid"
+    return new_id
 
 
 def list_bookmarks(conn: sqlite3.Connection, article_id: int) -> list[dict]:

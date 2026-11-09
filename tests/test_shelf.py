@@ -2,8 +2,13 @@ from fastapi.testclient import TestClient
 
 from app.db import init_db
 from app.main import create_app
-from app.shelf import (add_to_shelf, history_rows, in_shelf, record_open,
-                       remove_from_shelf)
+from app.shelf import (
+    add_to_shelf,
+    history_rows,
+    in_shelf,
+    record_open,
+    remove_from_shelf,
+)
 
 NOW = "2026-11-06T10:00:00"
 

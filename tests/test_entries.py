@@ -1,4 +1,4 @@
-from app.db import init_db, upsert_entry, insert_occurrence, entry_frequency
+from app.db import entry_frequency, init_db, insert_occurrence, upsert_entry
 
 
 def _article(conn, article_id):

@@ -48,6 +48,7 @@ def test_pick_today_skips_finished_articles(tmp_path):
 
 def test_mark_read_endpoint_and_missing_article(tmp_path):
     from fastapi.testclient import TestClient
+
     from app.main import create_app
     db = str(tmp_path / "t.db")
     conn = init_db(db)

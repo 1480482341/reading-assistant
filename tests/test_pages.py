@@ -297,3 +297,22 @@ def test_pages_and_static_assets_are_not_cached(tmp_path):
     for path in ("/", "/library", "/review", "/shelf", "/static/app.js",
                  "/static/style.css", "/static/theme.js"):
         assert client.get(path).headers.get("cache-control") == "no-store", path
+
+
+def test_reading_sidebar_shows_and_groups_grammar_categories(tmp_path):
+    db = str(tmp_path / "t.db")
+    init_db(db).close()
+    js = TestClient(create_app(db)).get("/static/app.js").text
+    for needle in ("cat-chip", "group-head", "item.category",
+                   "item.grammar_category"):
+        assert needle in js
+
+
+def test_save_refetches_marks_instead_of_appending(tmp_path):
+    db = str(tmp_path / "t.db")
+    init_db(db).close()
+    js = TestClient(create_app(db)).get("/static/app.js").text
+    assert "function loadMarks" in js
+    save_idx = js.index("async function save")
+    assert js.index("loadMarks()", save_idx) < js.index("hidePopup()", save_idx)
+    assert "addToSidebar" not in js

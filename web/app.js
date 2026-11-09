@@ -315,10 +315,7 @@ function showArticle(article) {
   renderBody();
   renderBookmarks();
   renderShelfButton();
-  fetch(`/api/articles/${full.id}/marks`)
-    .then(r => r.json())
-    .then(renderRightPanel)
-    .catch(err => console.error("Failed to load marks:", err));
+  loadMarks();
 }
 
 async function loadArticle() {
@@ -362,7 +359,8 @@ function showPopup(rect, item, text) {
   document.getElementById("popup-term").textContent = item.term || text;
   document.getElementById("popup-gloss").textContent = item.gloss_zh || "";
   document.getElementById("popup-why").textContent =
-    [item.grammar_role, item.why].filter(Boolean).join(" · ");
+    [item.grammar_category, item.grammar_role, item.why]
+      .filter(Boolean).join(" · ");
   placePopup(popup, rect);
 }
 
@@ -404,6 +402,12 @@ function appendMark(listEl, item) {
   const li = document.createElement("li");
   li.innerHTML = `<span class="lemma">${escapeHtml(item.term)}</span>
                   <span class="count">${escapeHtml(item.gloss_zh || "")}</span>`;
+  if (item.category) {
+    const chip = document.createElement("span");
+    chip.className = "cat-chip";
+    chip.textContent = item.category;
+    li.appendChild(chip);
+  }
   listEl.appendChild(li);
 }
 
@@ -414,14 +418,29 @@ function renderRightPanel(marks) {
   markedList.innerHTML = "";
   grammarList.innerHTML = "";
   for (const item of marks.occurrences || []) appendMark(markedList, item);
-  for (const item of marks.grammar || []) appendMark(grammarList, item);
+  const grammar = (marks.grammar || []).slice().sort((a, b) =>
+    String(a.category || "未分类").localeCompare(
+      String(b.category || "未分类"), "zh"));
+  let group = null;
+  for (const item of grammar) {
+    const label = item.category || "未分类";
+    if (label !== group) {
+      group = label;
+      const head = document.createElement("li");
+      head.className = "group-head";
+      head.textContent = label;
+      grammarList.appendChild(head);
+    }
+    appendMark(grammarList, item);
+  }
 }
 
-function addToSidebar(item) {
-  const list = item.type === "grammar"
-    ? document.getElementById("grammar-list")
-    : document.getElementById("marked-list");
-  appendMark(list, item);
+function loadMarks() {
+  if (!articleId) return;
+  fetch(`/api/articles/${articleId}/marks`)
+    .then(r => r.json())
+    .then(renderRightPanel)
+    .catch(err => console.error("Failed to load marks:", err));
 }
 
 // --- Bookmarks: add, jump to, and delete reading positions. ---
@@ -550,7 +569,7 @@ async function save() {
       item: current.item,
     }),
   });
-  addToSidebar(current.item);
+  loadMarks();
   hidePopup();
 }
 

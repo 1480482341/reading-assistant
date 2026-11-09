@@ -1,5 +1,6 @@
 import json
 import logging
+import math
 import os
 import re
 import shutil
@@ -168,7 +169,6 @@ def _run_with_retry(runner: Runner, prompt: str, min_items: int = 0) -> list[dic
     if retry or len(items) < min_items:
         items = parse_items(runner(prompt + "\n\nReturn ONLY the JSON array."))
     if len(items) < min_items:
-        logger.warning("low-output chunk: %d items, minimum %d", len(items), min_items)
         raise LowOutputError(items, f"低产出：{len(items)} 条（下限 {min_items}）")
     return items
 
@@ -238,8 +238,14 @@ def map_grammar_category(conn: sqlite3.Connection, category: str) -> int:
 def _analyse_chunk(runner: Runner, chunk: str) -> list[dict]:
     words = len(chunk.split())
     expected = max(1, round(words / WORDS_PER_ITEM))
-    min_items = (expected + 1) // 2 if words >= MIN_DENSITY_WORDS else 0
-    return _run_with_retry(runner, build_preanalysis_prompt(chunk), min_items=min_items)
+    min_items = (math.ceil(expected * LOW_OUTPUT_RATIO)
+                 if words >= MIN_DENSITY_WORDS else 0)
+    try:
+        return _run_with_retry(runner, build_preanalysis_prompt(chunk), min_items=min_items)
+    except LowOutputError as exc:
+        logger.warning("low-output chunk: %d words, %d items, target %d, minimum %d",
+                       words, len(exc.items), expected, min_items)
+        raise
 
 
 def analyze_article(conn: sqlite3.Connection, article_id: int,
@@ -263,14 +269,22 @@ def analyze_article(conn: sqlite3.Connection, article_id: int,
         low_items: list[dict] = []
         failures: list[str] = []
         with ThreadPoolExecutor(max_workers=PREANALYSIS_WORKERS) as pool:
-            futures = [pool.submit(_analyse_chunk, runner, chunk) for chunk in chunks]
+            futures = {pool.submit(_analyse_chunk, runner, chunk): chunk
+                       for chunk in chunks}
             for future in as_completed(futures):
+                chunk = futures[future]
                 try:
                     chunk_items.append(future.result())
                 except LowOutputError as exc:
                     low_items.extend(exc.items)
                     failures.append(str(exc))
+                except ModelCallError as exc:
+                    logger.warning("preanalysis chunk failed (model call, %d words): %s",
+                                   len(chunk.split()), exc)
+                    failures.append(str(exc))
                 except AnalysisError as exc:
+                    logger.warning("preanalysis chunk failed (parse, %d words): %s",
+                                   len(chunk.split()), exc)
                     failures.append(str(exc))
         if not chunk_items:
             if not low_items:

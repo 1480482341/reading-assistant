@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 
 import pytest
@@ -496,3 +497,74 @@ def test_chunk_model_call_error_is_not_retried_and_others_kept(tmp_path):
     assert calls.count("marker") == 1
     assert row["status"] == "ready"
     assert len(json.loads(row["payload_json"])) == 60
+
+
+def test_density_floor_uses_low_output_ratio(monkeypatch, tmp_path):
+    import app.analyze as mod
+
+    monkeypatch.setattr(mod, "LOW_OUTPUT_RATIO", 0.25)
+    conn = init_db(str(tmp_path / "t.db"))
+    aid = _article(conn, " ".join(["word"] * 500))
+    calls = []
+
+    def runner(prompt):
+        calls.append(prompt)
+        return _items(30)
+
+    analyze_article(conn, aid, runner=runner)
+    row = conn.execute("SELECT status FROM analysis WHERE article_id=?", (aid,)).fetchone()
+    assert len(calls) == 1
+    assert row["status"] == "ready"
+
+
+def test_low_output_warning_reports_words_and_target(tmp_path, caplog):
+    conn = init_db(str(tmp_path / "t.db"))
+    aid = _article(conn, " ".join(["word"] * 500))
+
+    with caplog.at_level(logging.WARNING, logger="app.analyze"):
+        analyze_article(conn, aid, runner=lambda p: _items(10))
+
+    messages = [r.getMessage() for r in caplog.records if r.name == "app.analyze"]
+    low = [m for m in messages if "low-output" in m]
+    assert low, messages
+    assert "500 words" in low[0]
+    assert "target 100" in low[0]
+    assert "10 items" in low[0]
+
+
+def test_partial_model_call_failure_logs_warning(tmp_path, caplog):
+    conn = init_db(str(tmp_path / "t.db"))
+    text = " ".join(["a"] * 500 + ["marker"] + ["b"] * 499)
+    aid = _article(conn, text)
+
+    def runner(prompt):
+        if "marker" in prompt:
+            raise ModelCallError("boom")
+        return _items(60)
+
+    with caplog.at_level(logging.WARNING, logger="app.analyze"):
+        analyze_article(conn, aid, runner=runner)
+
+    messages = [r.getMessage() for r in caplog.records if r.name == "app.analyze"]
+    failed = [m for m in messages if "model call" in m]
+    assert failed, messages
+    assert "500 words" in failed[0]
+
+
+def test_partial_parse_failure_logs_warning(tmp_path, caplog):
+    conn = init_db(str(tmp_path / "t.db"))
+    text = " ".join(["a"] * 500 + ["marker"] + ["b"] * 499)
+    aid = _article(conn, text)
+
+    def runner(prompt):
+        if "marker" in prompt:
+            return "not json"
+        return _items(60)
+
+    with caplog.at_level(logging.WARNING, logger="app.analyze"):
+        analyze_article(conn, aid, runner=runner)
+
+    messages = [r.getMessage() for r in caplog.records if r.name == "app.analyze"]
+    failed = [m for m in messages if "parse" in m]
+    assert failed, messages
+    assert "500 words" in failed[0]

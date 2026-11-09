@@ -19,7 +19,7 @@ Runner = Callable[[str], str]
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_CHUNK_WORDS = 800
+DEFAULT_CHUNK_WORDS = 500
 DEFAULT_TIMEOUT = 300
 WORDS_PER_ITEM = 5
 SNIPPET_MODEL = "haiku"

@@ -89,11 +89,11 @@ def test_chunk_handles_code_blocks_without_crashing():
     assert len(chunk_text(text, 2000)) == 2
 
 
-def test_default_chunk_size_is_800_words():
+def test_default_chunk_size_is_500_words():
     text = " ".join(f"w{i}" for i in range(1700))
     chunks = chunk_text(text)
-    assert len(chunks) == 3
-    assert all(len(c.split()) <= 800 for c in chunks)
+    assert len(chunks) == 4
+    assert all(len(c.split()) <= 500 for c in chunks)
 
 
 def test_prompt_targets_items_in_proportion_to_word_count():
@@ -110,7 +110,7 @@ def test_analyze_article_uses_default_chunking(tmp_path):
     aid = conn.execute("SELECT id FROM articles").fetchone()["id"]
     prompts = []
     analyze_article(conn, aid, runner=lambda p: prompts.append(p) or "[]")
-    assert len(prompts) == 3
+    assert len(prompts) == 4
 
 
 def test_run_claude_defaults_to_long_timeout_in_empty_temp_cwd(monkeypatch):

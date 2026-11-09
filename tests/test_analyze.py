@@ -385,7 +385,7 @@ def test_low_output_chunk_is_retried_once(tmp_path):
     assert len(json.loads(row["payload_json"])) == 60
 
 
-def test_persistently_low_output_marks_analysis_failed(tmp_path):
+def test_all_low_output_chunks_keep_items_and_stay_ready(tmp_path):
     conn = init_db(str(tmp_path / "t.db"))
     aid = _article(conn, " ".join(["word"] * 500))
     calls = []
@@ -395,10 +395,25 @@ def test_persistently_low_output_marks_analysis_failed(tmp_path):
         return _items(10)
 
     analyze_article(conn, aid, runner=runner)
-    row = conn.execute("SELECT status, error FROM analysis WHERE article_id=?", (aid,)).fetchone()
+    row = conn.execute("SELECT status, payload_json FROM analysis WHERE article_id=?", (aid,)).fetchone()
+    assert len(calls) == 2
+    assert row["status"] == "ready"
+    assert len(json.loads(row["payload_json"])) == 10
+
+
+def test_all_empty_chunks_still_fail(tmp_path):
+    conn = init_db(str(tmp_path / "t.db"))
+    aid = _article(conn, " ".join(["word"] * 500))
+    calls = []
+
+    def runner(prompt):
+        calls.append(prompt)
+        return _items(0)
+
+    analyze_article(conn, aid, runner=runner)
+    row = conn.execute("SELECT status FROM analysis WHERE article_id=?", (aid,)).fetchone()
     assert len(calls) == 2
     assert row["status"] == "failed"
-    assert "低产出" in row["error"]
 
 
 def test_short_chunk_skips_density_check(tmp_path):
@@ -439,9 +454,10 @@ def test_density_check_applies_at_200_words(tmp_path):
         return _items(1)
 
     analyze_article(conn, aid, runner=runner)
-    row = conn.execute("SELECT status FROM analysis WHERE article_id=?", (aid,)).fetchone()
+    row = conn.execute("SELECT status, payload_json FROM analysis WHERE article_id=?", (aid,)).fetchone()
     assert len(calls) == 2
-    assert row["status"] == "failed"
+    assert row["status"] == "ready"
+    assert len(json.loads(row["payload_json"])) == 1
 
 
 def test_low_output_chunk_does_not_discard_other_chunks(tmp_path):

@@ -56,6 +56,14 @@ class AnalysisError(Exception):
     pass
 
 
+class LowOutputError(AnalysisError):
+    """A chunk parsed successfully but stayed below the density floor."""
+
+    def __init__(self, items: list[dict], message: str) -> None:
+        super().__init__(message)
+        self.items = items
+
+
 class ModelCallError(AnalysisError):
     """The model call itself failed (missing binary, timeout, non-zero exit)."""
 
@@ -161,7 +169,7 @@ def _run_with_retry(runner: Runner, prompt: str, min_items: int = 0) -> list[dic
         items = parse_items(runner(prompt + "\n\nReturn ONLY the JSON array."))
     if len(items) < min_items:
         logger.warning("low-output chunk: %d items, minimum %d", len(items), min_items)
-        raise AnalysisError(f"低产出：{len(items)} 条（下限 {min_items}）")
+        raise LowOutputError(items, f"低产出：{len(items)} 条（下限 {min_items}）")
     return items
 
 
@@ -252,16 +260,26 @@ def analyze_article(conn: sqlite3.Connection, article_id: int,
     try:
         chunks = chunk_text(row["text"])
         chunk_items: list[list[dict]] = []
+        low_items: list[dict] = []
         failures: list[str] = []
         with ThreadPoolExecutor(max_workers=PREANALYSIS_WORKERS) as pool:
             futures = [pool.submit(_analyse_chunk, runner, chunk) for chunk in chunks]
             for future in as_completed(futures):
                 try:
                     chunk_items.append(future.result())
+                except LowOutputError as exc:
+                    low_items.extend(exc.items)
+                    failures.append(str(exc))
                 except AnalysisError as exc:
                     failures.append(str(exc))
         if not chunk_items:
-            raise AnalysisError("; ".join(failures) or "预分析失败")
+            if not low_items:
+                raise AnalysisError("; ".join(failures) or "预分析失败")
+            # Every chunk fell below the floor: sparse input is plausible, and
+            # marking the article failed makes the startup job re-run it forever.
+            logger.warning("all chunks below the density floor; keeping %d items",
+                           len(low_items))
+            chunk_items.append(low_items)
         merged: dict[tuple[str, str], dict] = {}
         for items in chunk_items:
             for item in items:

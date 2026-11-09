@@ -202,11 +202,15 @@ def init_db(path: str) -> sqlite3.Connection:
     return conn
 
 
-def upsert_entry(conn: sqlite3.Connection, kind: str, lemma: str) -> int:
+def upsert_entry(conn: sqlite3.Connection, kind: str, lemma: str,
+                 category: str = "") -> int:
     row = conn.execute(
-        "INSERT INTO entries(kind, lemma) VALUES(?, ?) "
-        "ON CONFLICT(kind, lemma) DO UPDATE SET lemma=excluded.lemma RETURNING id",
-        (kind, lemma),
+        "INSERT INTO entries(kind, lemma, category) VALUES(?, ?, ?) "
+        "ON CONFLICT(kind, lemma) DO UPDATE SET "
+        "category = CASE WHEN excluded.category <> '' "
+        "THEN excluded.category ELSE entries.category END "
+        "RETURNING id",
+        (kind, lemma, category),
     ).fetchone()
     conn.commit()
     return row["id"]

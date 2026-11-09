@@ -2,7 +2,7 @@ import logging
 
 from fastapi.testclient import TestClient
 
-from app.db import init_db
+from app.db import connect, init_db
 from app.main import create_app
 
 PAYLOAD = (
@@ -258,3 +258,39 @@ def test_marks_endpoint_splits_words_and_grammar(tmp_path):
     body = TestClient(create_app(db)).get("/api/articles/1/marks").json()
     assert [o["term"] for o in body["occurrences"]] == ["albeit"]
     assert [o["term"] for o in body["grammar"]] == ["inversion"]
+
+
+def test_occurrences_store_normalized_grammar_category(tmp_path):
+    client = _client(tmp_path)
+    item = {"term": "Having started", "type": "grammar", "gloss_zh": "开始之后",
+            "grammar_role": "状语", "why": "非谓语", "grammar_category": "过去分词"}
+    r = client.post("/api/occurrences", json={
+        "article_id": 1, "text": "Having started",
+        "sentence": "Having started early, she left.",
+        "item": item})
+    assert r.status_code == 200
+    conn = connect(str(tmp_path / "t.db"))
+    assert conn.execute("SELECT category FROM entries").fetchone()["category"] == "过去分词"
+
+
+def test_unknown_grammar_category_folds_to_other(tmp_path):
+    client = _client(tmp_path)
+    item = {"term": "Having started", "type": "grammar", "gloss_zh": "开始之后",
+            "grammar_role": "状语", "why": "非谓语",
+            "grammar_category": "分词状语从句"}
+    client.post("/api/occurrences", json={
+        "article_id": 1, "text": "Having started",
+        "sentence": "Having started early, she left.", "item": item})
+    conn = connect(str(tmp_path / "t.db"))
+    assert conn.execute("SELECT category FROM entries").fetchone()["category"] == "其他"
+
+
+def test_word_occurrence_has_no_category(tmp_path):
+    client = _client(tmp_path)
+    item = {"term": "albeit", "type": "word", "gloss_zh": "尽管",
+            "grammar_role": "conj", "why": "让步"}
+    client.post("/api/occurrences", json={
+        "article_id": 1, "text": "albeit", "sentence": "albeit short",
+        "item": item})
+    conn = connect(str(tmp_path / "t.db"))
+    assert conn.execute("SELECT category FROM entries").fetchone()["category"] == ""

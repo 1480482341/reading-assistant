@@ -20,6 +20,7 @@ from app.bookmarks import add_bookmark, delete_bookmark, list_bookmarks
 from app.collect import ingest_pdf, ingest_text, ingest_url, start_startup_job
 from app.db import connect, init_db, insert_occurrence, upsert_entry
 from app.export import entry_rows, export_csv, export_markdown
+from app.grammar import normalize_grammar_category
 from app.library import library_rows
 from app.lookup import cached_item, find_analysis_item, normalize_term, store_item
 from app.metadata import INTEREST_TAGS
@@ -203,7 +204,11 @@ def create_app(db_path: str, runner: Runner | None = None) -> FastAPI:
             raise HTTPException(status_code=400, detail="词条为空")
         conn = open_db()
         try:
-            entry_id = upsert_entry(conn, str(item.get("type", "word")), lemma)
+            kind = str(item.get("type", "word"))
+            raw_category = str(item.get("grammar_category") or "").strip()
+            category = (normalize_grammar_category(raw_category)
+                        if kind == "grammar" and raw_category else "")
+            entry_id = upsert_entry(conn, kind, lemma, category)
             recorded = insert_occurrence(
                 conn, entry_id, article_id,
                 body.sentence, text,

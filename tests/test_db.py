@@ -2,7 +2,7 @@ import sqlite3
 
 import pytest
 
-from app.db import init_db
+from app.db import init_db, upsert_entry
 
 
 def test_creates_all_tables(tmp_path):
@@ -150,6 +150,21 @@ def test_v3_database_gains_entry_category(tmp_path):
     row = conn.execute("SELECT kind, lemma, category FROM entries").fetchone()
     assert tuple(row) == ("grammar", "having started", "")
     assert conn.execute("PRAGMA user_version").fetchone()[0] == 4
+
+
+def test_upsert_entry_stores_category(tmp_path):
+    conn = init_db(str(tmp_path / "t.db"))
+    entry_id = upsert_entry(conn, "grammar", "having started", "过去分词")
+    assert conn.execute("SELECT category FROM entries WHERE id = ?",
+                        (entry_id,)).fetchone()["category"] == "过去分词"
+
+
+def test_upsert_entry_keeps_category_when_blank(tmp_path):
+    conn = init_db(str(tmp_path / "t.db"))
+    entry_id = upsert_entry(conn, "grammar", "having started", "过去分词")
+    upsert_entry(conn, "grammar", "having started", "")
+    assert conn.execute("SELECT category FROM entries WHERE id = ?",
+                        (entry_id,)).fetchone()["category"] == "过去分词"
 
 
 def test_deleting_article_cascades_marks(tmp_path):

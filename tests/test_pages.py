@@ -275,3 +275,25 @@ def test_error_message_resets_color_mode_and_shelf_button(tmp_path):
         js.index("function setColorMode")
     assert js.index("renderShelfButton()", msg_idx) < \
         js.index("function renderShelfButton")
+
+
+def test_erase_highlight_mode_is_a_fourth_swatch(tmp_path):
+    html = _html("/", tmp_path)
+    assert 'data-color="erase"' in html
+    db = str(tmp_path / "t.db")
+    init_db(db).close()
+    client = TestClient(create_app(db))
+    js = client.get("/static/app.js").text
+    assert "function eraseAnnotations" in js
+    assert 'colorMode === "erase"' in js
+    css = client.get("/static/style.css").text
+    assert 'button.swatch[data-color="erase"]' in css
+
+
+def test_pages_and_static_assets_are_not_cached(tmp_path):
+    db = str(tmp_path / "t.db")
+    init_db(db).close()
+    client = TestClient(create_app(db))
+    for path in ("/", "/library", "/review", "/shelf", "/static/app.js",
+                 "/static/style.css", "/static/theme.js"):
+        assert client.get(path).headers.get("cache-control") == "no-store", path

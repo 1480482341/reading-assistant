@@ -90,6 +90,20 @@ def create_app(db_path: str, runner: Runner | None = None) -> FastAPI:
         yield
 
     app = FastAPI(title="Reading Assistant", lifespan=lifespan)
+
+    # Frontend files are edited in place on this machine, so the browser must
+    # never reuse a cached page or asset: a stale app.js silently breaks new
+    # UI that depends on it.
+    pages = ("/", "/library", "/review", "/shelf")
+
+    @app.middleware("http")
+    async def disable_caching(request, call_next):
+        response = await call_next(request)
+        path = request.url.path
+        if path in pages or path.startswith("/static/"):
+            response.headers["Cache-Control"] = "no-store"
+        return response
+
     init_db(db_path).close()
 
     def open_db():

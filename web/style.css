@@ -227,6 +227,19 @@ button.swatch {
 button.swatch[data-color="red"] { background: var(--sw-red); }
 button.swatch[data-color="green"] { background: var(--sw-green); }
 button.swatch[data-color="yellow"] { background: var(--sw-yellow); }
+/* Eraser chip: clears highlights under the next selection. */
+button.swatch[data-color="erase"] {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--panel);
+  border: 1px dashed var(--muted);
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1;
+}
+button.swatch[data-color="erase"]::after { content: "×"; }
+button.swatch[data-color="erase"]:hover { border-color: var(--accent); color: var(--accent); }
 button.swatch.active {
   box-shadow: 0 0 0 2px var(--panel), 0 0 0 4px var(--accent);
 }

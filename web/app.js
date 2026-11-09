@@ -186,6 +186,29 @@ async function applyAnnotation(range, color) {
   }
 }
 
+// Remove every highlight overlapping the selection. Whole annotations go,
+// not just the selected slice, so the result stays predictable.
+async function eraseAnnotations(range) {
+  if (!articleId) return;
+  const hits = annotations.filter(a =>
+    a.para_index === range.paraIndex &&
+    a.start_offset < range.end &&
+    a.end_offset > range.start);
+  if (!hits.length) return;
+  const removed = [];
+  for (const ann of hits) {
+    try {
+      const resp = await fetch(`/api/annotations/${ann.id}`, { method: "DELETE" });
+      if (resp.ok) removed.push(String(ann.id));
+    } catch (err) {
+      console.error("Failed to remove annotation:", err);
+    }
+  }
+  if (!removed.length) return;
+  annotations = annotations.filter(a => !removed.includes(String(a.id)));
+  renderBody();
+}
+
 // --- Highlight popup: recolor or remove an existing annotation. ---
 
 function hideHlPopup() {
@@ -503,7 +526,8 @@ document.addEventListener("mouseup", e => {
     if (!range) return;
     suppressHlClick = true;
     hideHlPopup();
-    applyAnnotation(range, colorMode);
+    if (colorMode === "erase") eraseAnnotations(range);
+    else applyAnnotation(range, colorMode);
     return;
   }
   // A drag that ends on a highlight must not open the recolor popup: the

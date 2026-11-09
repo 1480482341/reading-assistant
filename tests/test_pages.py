@@ -316,3 +316,16 @@ def test_save_refetches_marks_instead_of_appending(tmp_path):
     save_idx = js.index("async function save")
     assert js.index("loadMarks()", save_idx) < js.index("hidePopup()", save_idx)
     assert "addToSidebar" not in js
+
+
+def test_review_page_shows_category_badge_and_groups_list(tmp_path):
+    db = str(tmp_path / "t.db")
+    init_db(db).close()
+    client = TestClient(create_app(db))
+    assert 'id="card-category"' in client.get("/review").text
+    js = client.get("/static/review.js").text
+    for needle in ("card-category", "group-head", "item.category"):
+        assert needle in js
+    css = client.get("/static/style.css").text
+    for needle in (".cat-chip", ".group-head", ".card-category"):
+        assert needle in css

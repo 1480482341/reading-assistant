@@ -17,6 +17,9 @@ function render() {
   cardEl.hidden = false;
   emptyEl.hidden = true;
   document.getElementById("card-word").textContent = item.lemma;
+  const categoryEl = document.getElementById("card-category");
+  categoryEl.textContent = item.category || "";
+  categoryEl.hidden = !item.category;
   document.getElementById("card-gloss").textContent = item.gloss || "";
   document.getElementById("card-sentence").textContent = item.sentence || "";
 }
@@ -39,15 +42,37 @@ async function load() {
   render();
   const rows = await fetch("/api/entries").then(r => r.json());
   const body = document.getElementById("list-body");
-  body.replaceChildren(...rows.map(row => {
+  const groupOf = row =>
+    row.kind === "grammar" && row.category ? row.category : "词汇与短语";
+  const sorted = rows.slice().sort((a, b) => {
+    const ga = groupOf(a);
+    const gb = groupOf(b);
+    if (ga !== gb) return ga.localeCompare(gb, "zh");
+    return String(a.lemma).localeCompare(String(b.lemma), "zh");
+  });
+  const nodes = [];
+  let group = null;
+  for (const row of sorted) {
+    const label = groupOf(row);
+    if (label !== group) {
+      group = label;
+      const head = document.createElement("tr");
+      head.className = "group-head";
+      const td = document.createElement("td");
+      td.colSpan = 3;
+      td.textContent = label;
+      head.appendChild(td);
+      nodes.push(head);
+    }
     const tr = document.createElement("tr");
     for (const value of [row.lemma, row.gloss || "", row.count]) {
       const td = document.createElement("td");
       td.textContent = String(value);
       tr.appendChild(td);
     }
-    return tr;
-  }));
+    nodes.push(tr);
+  }
+  body.replaceChildren(...nodes);
 }
 
 document.getElementById("btn-known").addEventListener("click", () => answer(true));

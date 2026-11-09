@@ -33,11 +33,33 @@ async function checkHealth() {
   }
 }
 
+function clearSelection() {
+  const sel = window.getSelection();
+  if (sel) sel.removeAllRanges();
+}
+
 function hidePopup() {
   popupToken += 1;
   popup.hidden = true;
-  const sel = window.getSelection();
-  if (sel) sel.removeAllRanges();
+  clearSelection();
+}
+
+// Place an absolutely-positioned popup next to `rect`: below it by default,
+// flipped above when it would overflow the viewport, clamped horizontally.
+function placePopup(el, rect) {
+  el.hidden = false;
+  const margin = 8;
+  const width = el.offsetWidth;
+  const height = el.offsetHeight;
+  const left = Math.min(Math.max(rect.left, margin),
+    window.innerWidth - width - margin);
+  let top = rect.bottom + margin;
+  if (top + height > window.innerHeight - margin) {
+    top = rect.top - height - margin;
+  }
+  top = Math.max(margin, top);
+  el.style.left = `${window.scrollX + left}px`;
+  el.style.top = `${window.scrollY + top}px`;
 }
 
 function showMessage(title, body) {
@@ -173,7 +195,10 @@ async function applyAnnotation(range, color) {
         color,
       }),
     });
-    if (!resp.ok) return;
+    if (!resp.ok) {
+      clearSelection();
+      return;
+    }
     const ann = await resp.json();
     annotations = annotations.filter(a =>
       !(a.para_index === ann.para_index &&
@@ -183,6 +208,7 @@ async function applyAnnotation(range, color) {
     renderBody();
   } catch (err) {
     console.error("Failed to save annotation:", err);
+    clearSelection();
   }
 }
 
@@ -204,7 +230,10 @@ async function eraseAnnotations(range) {
       console.error("Failed to remove annotation:", err);
     }
   }
-  if (!removed.length) return;
+  if (!removed.length) {
+    clearSelection();
+    return;
+  }
   annotations = annotations.filter(a => !removed.includes(String(a.id)));
   renderBody();
 }
@@ -223,11 +252,7 @@ function openHlPopup(span) {
     b.classList.toggle("active", span.classList.contains(`hl-${b.dataset.color}`));
   }
   const rect = span.getBoundingClientRect();
-  hlPopup.hidden = false;
-  const left = Math.min(window.scrollX + rect.left,
-    window.scrollX + window.innerWidth - 250);
-  hlPopup.style.left = `${left}px`;
-  hlPopup.style.top = `${window.scrollY + rect.bottom + 8}px`;
+  placePopup(hlPopup, rect);
 }
 
 // --- Shelf: add or remove the current article from the shelf. ---
@@ -239,10 +264,17 @@ function renderShelfButton() {
 }
 
 // Toggle shelf membership. Only flip the local state once the server has
-// accepted the request, so a failed call leaves the button unchanged.
+// accepted the request, so a failed call leaves the button unchanged. The
+// guard and disabled attribute swallow repeat clicks while a request is in
+// flight (the POST is idempotent, but the label would flicker).
+let shelfPending = false;
+
 async function toggleShelf() {
-  if (!articleId || !full) return;
+  if (!articleId || !full || shelfPending) return;
+  const button = document.getElementById("shelf-toggle");
   const adding = !full.in_shelf;
+  shelfPending = true;
+  button.disabled = true;
   try {
     const resp = await fetch(`/api/shelf/${articleId}`, {
       method: adding ? "POST" : "DELETE",
@@ -252,6 +284,9 @@ async function toggleShelf() {
     renderShelfButton();
   } catch (err) {
     console.error("Failed to toggle shelf:", err);
+  } finally {
+    shelfPending = false;
+    button.disabled = false;
   }
 }
 
@@ -328,10 +363,7 @@ function showPopup(rect, item, text) {
   document.getElementById("popup-gloss").textContent = item.gloss_zh || "";
   document.getElementById("popup-why").textContent =
     [item.grammar_role, item.why].filter(Boolean).join(" · ");
-  popup.hidden = false;
-  const left = Math.min(window.scrollX + rect.left, window.scrollX + window.innerWidth - 300);
-  popup.style.left = `${left}px`;
-  popup.style.top = `${window.scrollY + rect.bottom + 8}px`;
+  placePopup(popup, rect);
 }
 
 async function onSelect() {
@@ -492,13 +524,18 @@ function renderBookmarks() {
   }
 }
 
-// Scroll to a bookmark's paragraph, then adjust so the saved offset lands
-// right below the topbar.
+// Scroll so the saved position lands right below the topbar. Computing the
+// absolute offset (clamped to the scrollable range) reproduces the exact
+// scroll position recorded when the bookmark was added; scrollIntoView
+// followed by a relative nudge drifts when the paragraph sits near the end
+// of the document, because the start alignment itself is clamped there.
 function jumpToBookmark(bm) {
   const p = bodyEl.querySelector(`p[data-para="${bm.para_index}"]`);
   if (!p) return;
-  p.scrollIntoView({ block: "start" });
-  window.scrollBy(0, -topbarHeight() + bm.offset_ratio * p.offsetHeight);
+  const paraTop = window.scrollY + p.getBoundingClientRect().top;
+  const target = paraTop - topbarHeight() + bm.offset_ratio * p.offsetHeight;
+  const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
+  window.scrollTo({ top: Math.max(0, Math.min(target, maxScroll)) });
 }
 
 async function save() {

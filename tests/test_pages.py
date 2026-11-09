@@ -149,7 +149,7 @@ def test_bookmark_anchor_measures_dom(tmp_path):
     db = str(tmp_path / "t.db")
     init_db(db).close()
     js = TestClient(create_app(db)).get("/static/app.js").text
-    for needle in ("getBoundingClientRect", "scrollIntoView", "scrollBy",
+    for needle in ("getBoundingClientRect", "scrollTo", "scrollHeight",
                    "offsetHeight"):
         assert needle in js
 

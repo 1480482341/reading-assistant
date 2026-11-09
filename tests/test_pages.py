@@ -329,3 +329,16 @@ def test_review_page_shows_category_badge_and_groups_list(tmp_path):
     css = client.get("/static/style.css").text
     for needle in (".cat-chip", ".group-head", ".card-category"):
         assert needle in css
+
+
+def test_save_reports_failure_before_closing_popup(tmp_path):
+    db = str(tmp_path / "t.db")
+    init_db(db).close()
+    js = TestClient(create_app(db)).get("/static/app.js").text
+    save_idx = js.index("async function save")
+    fail_idx = js.index("if (!resp.ok)", save_idx)
+    load_idx = js.index("loadMarks()", save_idx)
+    fail_branch = js[fail_idx:load_idx]
+    assert "alert(" in fail_branch
+    assert "return;" in fail_branch
+    assert fail_idx < js.index("hidePopup()", save_idx)

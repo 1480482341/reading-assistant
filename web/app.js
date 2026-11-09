@@ -559,7 +559,7 @@ function jumpToBookmark(bm) {
 
 async function save() {
   if (!current || !articleId) return;
-  await fetch("/api/occurrences", {
+  const resp = await fetch("/api/occurrences", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -569,6 +569,10 @@ async function save() {
       item: current.item,
     }),
   });
+  if (!resp.ok) {
+    alert("保存失败，请稍后再试。");
+    return;
+  }
   loadMarks();
   hidePopup();
 }

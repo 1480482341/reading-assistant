@@ -370,20 +370,20 @@ def test_analyze_article_uses_six_parallel_chunks(monkeypatch, tmp_path):
     assert captured["max_workers"] == 6
 
 
-def test_low_output_chunk_is_retried_once(tmp_path):
+def test_low_output_chunk_is_not_retried(tmp_path):
     conn = init_db(str(tmp_path / "t.db"))
     aid = _article(conn, " ".join(["word"] * 500))
     calls = []
 
     def runner(prompt):
         calls.append(prompt)
-        return _items(10) if len(calls) == 1 else _items(60)
+        return _items(10)
 
     analyze_article(conn, aid, runner=runner)
     row = conn.execute("SELECT status, payload_json FROM analysis WHERE article_id=?", (aid,)).fetchone()
-    assert len(calls) == 2
+    assert len(calls) == 1
     assert row["status"] == "ready"
-    assert len(json.loads(row["payload_json"])) == 60
+    assert len(json.loads(row["payload_json"])) == 10
 
 
 def test_all_low_output_chunks_keep_items_and_stay_ready(tmp_path):
@@ -397,7 +397,7 @@ def test_all_low_output_chunks_keep_items_and_stay_ready(tmp_path):
 
     analyze_article(conn, aid, runner=runner)
     row = conn.execute("SELECT status, payload_json FROM analysis WHERE article_id=?", (aid,)).fetchone()
-    assert len(calls) == 2
+    assert len(calls) == 1
     assert row["status"] == "ready"
     assert len(json.loads(row["payload_json"])) == 10
 
@@ -413,7 +413,7 @@ def test_all_empty_chunks_still_fail(tmp_path):
 
     analyze_article(conn, aid, runner=runner)
     row = conn.execute("SELECT status FROM analysis WHERE article_id=?", (aid,)).fetchone()
-    assert len(calls) == 2
+    assert len(calls) == 1
     assert row["status"] == "failed"
 
 
@@ -456,7 +456,7 @@ def test_density_check_applies_at_200_words(tmp_path):
 
     analyze_article(conn, aid, runner=runner)
     row = conn.execute("SELECT status, payload_json FROM analysis WHERE article_id=?", (aid,)).fetchone()
-    assert len(calls) == 2
+    assert len(calls) == 1
     assert row["status"] == "ready"
     assert len(json.loads(row["payload_json"])) == 1
 
@@ -474,7 +474,7 @@ def test_low_output_chunk_does_not_discard_other_chunks(tmp_path):
     analyze_article(conn, aid, runner=runner)
     row = conn.execute("SELECT status, payload_json FROM analysis WHERE article_id=?", (aid,)).fetchone()
     assert calls.count("plain") == 1
-    assert calls.count("marker") == 2
+    assert calls.count("marker") == 1
     assert row["status"] == "ready"
     assert len(json.loads(row["payload_json"])) == 60
 
@@ -568,3 +568,19 @@ def test_partial_parse_failure_logs_warning(tmp_path, caplog):
     failed = [m for m in messages if "parse" in m]
     assert failed, messages
     assert "500 words" in failed[0]
+
+
+def test_article_parse_failure_is_retried_once(tmp_path):
+    conn = init_db(str(tmp_path / "t.db"))
+    aid = _article(conn, " ".join(["word"] * 500))
+    calls = []
+
+    def runner(prompt):
+        calls.append(prompt)
+        return "not json" if len(calls) == 1 else _items(60)
+
+    analyze_article(conn, aid, runner=runner)
+    row = conn.execute("SELECT status, payload_json FROM analysis WHERE article_id=?", (aid,)).fetchone()
+    assert len(calls) == 2
+    assert row["status"] == "ready"
+    assert len(json.loads(row["payload_json"])) == 60

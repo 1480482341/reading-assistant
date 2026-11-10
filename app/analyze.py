@@ -166,7 +166,7 @@ def _run_with_retry(runner: Runner, prompt: str, min_items: int = 0) -> list[dic
         raise
     except AnalysisError:
         items, retry = [], True
-    if retry or len(items) < min_items:
+    if retry:
         items = parse_items(runner(prompt + "\n\nReturn ONLY the JSON array."))
     if len(items) < min_items:
         raise LowOutputError(items, f"低产出：{len(items)} 条（下限 {min_items}）")

@@ -2,6 +2,26 @@
 
 本地单机阅读器：订阅源自动备好英文长文，划词即得中文释义与语法拆解，所有主动查阅的词条入库并按间隔重复复习。
 
+## 环境要求
+
+- Python 3.11 或更高
+- [uv](https://docs.astral.sh/uv/)
+- [Claude Code CLI](https://claude.com/claude-code)，并已在本机登录
+- 能访问默认 RSS 源的网络（首次启动会抓取 Quanta / JSTOR Daily / Aeon）
+
+模型调用只走本机 `claude` 命令，不需要 API key。没有安装或未登录时应用仍可启动：划词降级为只记录、预分析暂停，阅读与复习不受影响（详见「依赖本机模型」）。
+
+## 首次运行
+
+```bash
+git clone https://github.com/1480482341/reading-assistant.git
+cd reading-assistant
+uv sync
+uv run uvicorn app.main:app --port 8000
+```
+
+数据库在首次启动时自动创建为 `data/library.db`。Windows、macOS、Linux 均可运行。
+
 ## 启动
 
 ```bash
@@ -91,3 +111,7 @@ curl http://127.0.0.1:8000/api/health
 ```bash
 uv run pytest
 ```
+
+## 许可证
+
+MIT，见 [LICENSE](LICENSE)。
